@@ -71,6 +71,22 @@ datasets: propose the table alone and give the vibe app an import
 screen — the data then enters under the owner's own session, RLS
 applying to every row.
 
+## Where a user table lands: siloed or unsiloed, never invisible
+
+The moment the approved script creates the table, the siloing warden
+(`20261101000000_every_table_siloed.sql`, `notes/05-members.md`) registers
+it in `data_tables` as a whole table, turns RLS on, and installs the
+generic member read policy. It starts *unsiloed*: readable by no member,
+listed under Silo Soon on the Syla tab next to unsiloed notes and docs.
+From there the owner places the whole table in silos or names members on
+it (`table_silos` / `table_members`) — the only way its rows ever reach a
+member, through `member_rq` — or marks it siloed to keep it private. A
+user table cannot be declared per-row or system; the sandbox role holds
+no such power, and Syla has no write path into the placements. The same
+apply also gets the two grants the sandbox role was missing (execute on
+the log trigger function, trigger-context insert on `row_edits`), without
+which an apply could not complete.
+
 ## What this is not
 
 Not a bypass of the product schema: product tables still arrive only as

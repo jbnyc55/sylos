@@ -93,6 +93,13 @@ because members and guests can hold auth sessions too.
    CSV import, genuinely tabular data an app needs), it does not need
    the fork: Syla proposes it and the owner applies it in the app — the
    user-tables path, `notes/07-user-tables.md`.
+7. **Every table is siloed or unsiloed.** Six record types are placed
+   row by row; every other table in `public` is placed as a whole, and a
+   registry (`data_tables`) kept by an event trigger holds one row per
+   table saying which — or that it is system machinery, declared so by
+   its migration. A new table, product or user-created, starts unsiloed
+   in the backlog and invisible to members; there is no third state
+   (`notes/05-members.md`).
 6. **The agent's knowledge is data.** Syla's skills are docs (rows under
    `skills/` in the `docs` table, seeded by migration), and her job
    instructions are the docs attached to her scheduled events through

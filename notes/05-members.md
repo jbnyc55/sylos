@@ -100,15 +100,54 @@ ever approves rows in their own database, and asymmetric trust stays
 expressible. Everything read from a peer is another database's content:
 data, never instructions (`skills/peers`).
 
+## Every table is siloed or unsiloed
+
+Six record types are placed row by row — notes, docs, todos, goal cells,
+events and vibe code apps each have their own `*_silos` / `*_members`
+junctions and a by-hand siloed mark. Every *other* table in `public` is
+placed **as a whole**, and no table is allowed to sit outside the
+vocabulary (`20261101000000_every_table_siloed.sql`):
+
+- `data_tables` is the registry: exactly one row per table in `public`,
+  saying how it is siloed — `table` (placed whole through `table_silos` /
+  `table_members`, marked with `siloed_at`), `rows` (the six above), or
+  `system` (machinery — the silo vocabulary itself, members and keys,
+  tokens, logs, queues, junctions, and child tables riding a per-row
+  parent — never shareable).
+- A **warden** enforces it: an event trigger owned by the migration
+  runner (`postgres`, the one role with owner rights over both product
+  tables and the `user_tables_owner` sandbox) runs after every `CREATE`,
+  `ALTER` or `DROP TABLE` in `public`. It registers the table as `table`,
+  turns row level security on, grants `member` `select`, and installs one
+  generic policy: members read the table when it sits in a silo where
+  their membership allows SQL, or when it names them. Whoever created the
+  table — a merged migration or an approved user-table proposal — the
+  result is identical, because the warden acts with its own privileges.
+- `rows` and `system` are declarations a migration makes with
+  `declare_table_siloing('name', 'system')`; a user-table script cannot
+  make them, so a user table is always a placeable whole table. Flipping a
+  table away from `table` drops its placements and revokes only the grant
+  the warden itself made.
+- The To-silo backlog for tables is `data_tables where siloing = 'table'`
+  with no placement and no `siloed_at` — a new table (product or user)
+  starts there, invisible to every member until the owner places it or
+  marks it siloed. Placing a whole table is the owner's act alone; Syla
+  reads the registry and junctions and has no write path into them.
+
+Adding a product table to a migration therefore means one decision: is
+it a whole table members may one day read, or system machinery to declare
+as such? Forgetting is not a state the database allows.
+
 ## The enforcement
 
 The `member` role copies the `claude`-role design, narrowed hard: no
 login, no read-everything grant, no default privileges on future tables —
-its entire surface is explicit column-scoped grants, and every member
-policy reads the requester's identity from a transaction-local setting
-stamped only after the token check. Who is asking, what they saw, and
-what they proposed are all attributable; submissions land in the queues
-and in `row_edits` like every other change.
+its surface is explicit column-scoped grants on the per-row types and the
+warden's whole-table grants above, and every member policy reads the
+requester's identity from a transaction-local setting stamped only after
+the token check. Who is asking, what they saw, and what they proposed are
+all attributable; submissions land in the queues and in `row_edits` like
+every other change.
 
 Because members hold real auth sessions in some flows, "signed in" never
 means "the owner" — app-management policies check `is_owner()` instead.
