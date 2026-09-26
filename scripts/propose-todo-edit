@@ -26,7 +26,9 @@
 #           with their current values
 #   retire:  --todo <uuid>, --before with the todo's current {"title", ...}
 #   complete: --todo <uuid>, --after naming the day to check off in
-#             todo_done: {"day": "YYYY-MM-DD"}
+#             todo_done, plus your report when the todo was the owner's
+#             ask: {"day": "YYYY-MM-DD", "details": "what you did"} —
+#             on approval the app appends the report to todo.details
 # --day is the summarized day whose data argued for the edit.
 #
 # Environment (all required; see notes/07-agent-rq-https.md):

@@ -64,6 +64,13 @@ generic on purpose; the work is in the queue:
 
    An event with no docs is its title: do the sensible, narrow version
    of what it names, through your structured write paths only.
+
+   An owner's **send to Syla** arrives as a one-off event with a single
+   child todo: the todo's title is the subject and its `details` column
+   holds the full message. Do the task, then file a complete proposal
+   on that todo with your report in `after.details`
+   (`scripts/propose-todo-edit --kind complete`) — the owner reviews
+   your report in the Inbox, and checking it off is their approval.
 5. Report every claimed run before stopping:
    `scripts/syla-finish --run <run_id> --status done --summary "<1–2 sentences>"`
    (or `--status failed` with the reason, if a run cannot be completed).
