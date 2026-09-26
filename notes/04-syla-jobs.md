@@ -56,6 +56,17 @@ runs sit `queued`; webhook lost → re-fired up to 3 times, then `failed`
 with a reason; session died → `failed` after 2 hours.
 
 One path skips the tick entirely: the app's **send to Syla** calls
+`send_to_syla()` (owner-only, SECURITY DEFINER), which creates a
+pre-latched one-off event on her calendar — the waking — with one
+child todo carrying the task (subject as title, full message in
+`todo.details`), queues its run, and fires the webhook inline with the
+same Vault credential, so she wakes immediately. She closes the loop
+with a complete proposal carrying her report in `after.details`;
+approving it from the Inbox checks the todo off and appends the report
+to its details. Without a stored credential the run just waits for the
+next dispatcher tick, like everything else.
+
+One path skips the tick entirely: the app's **send to Syla** calls
 `send_to_syla()` (owner-only, SECURITY DEFINER), which writes the
 "For Syla" note, creates a pre-latched one-off event on her calendar,
 queues its run, and fires the webhook inline with the same Vault
