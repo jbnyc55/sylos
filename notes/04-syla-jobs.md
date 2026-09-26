@@ -55,6 +55,14 @@ Failure is designed to be visible, never silent: no Vault credential →
 runs sit `queued`; webhook lost → re-fired up to 3 times, then `failed`
 with a reason; session died → `failed` after 2 hours.
 
+One path skips the tick entirely: the app's **send to Syla** calls
+`send_to_syla()` (owner-only, SECURITY DEFINER), which writes the
+"For Syla" note, creates a pre-latched one-off event on her calendar,
+queues its run, and fires the webhook inline with the same Vault
+credential — she wakes for the message immediately. Without a stored
+credential the run just waits for the next dispatcher tick, like
+everything else.
+
 ## The webhook credential
 
 The generic routine is fired with its own bearer token, scoped to firing
