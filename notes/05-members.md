@@ -37,12 +37,14 @@ The invite travels person-to-person through a channel the owner already
 trusts, and the payload itself is the proof
 (`20261027000000_member_invite_links.sql`). Supabase sends no email.
 
-1. On the **Manage** page, add the person as a member and put them in
-   the silos you want to share (toggling what each grants). The app
-   calls `mint_member_invite`, which stores a sha256 hash of a
-   single-use, expiring invite code and returns the code once. The app
-   wraps it as a `sylos://join` link (your project URL + publishable key
-   + code) and hands it to the share sheet — you send it yourself, over
+1. On the **Manage** page, add the person as a member — just a *name*,
+   what you call them; email is optional contact metadata
+   (`20261031000000_member_names.sql`) — and put them in the silos you
+   want to share (toggling what each grants). The app calls
+   `mint_member_invite`, which stores a sha256 hash of a single-use,
+   expiring invite code and returns the code once. The app wraps it as
+   a `sylos://join` link (your project URL + publishable key + code)
+   and hands it to the share sheet — you send it yourself, over
    iMessage or anything else.
 2. Their Sylos app opens the link and calls `claim_member_invite(code)`:
    a matching, unexpired, unblocked code is burned and buys their
