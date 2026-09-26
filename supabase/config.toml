@@ -80,3 +80,12 @@ verify_jwt = false
 # (see notes/08-provisioning.md).
 [functions.supabase-oauth]
 verify_jwt = false
+
+# The push relay — DEVELOPER infrastructure like supabase-oauth: it holds
+# the app's APNs signing key, which is bound to the bundle id and must
+# never reach a user's project (owners can read their own secrets) or the
+# app binary. Each install's push function hands it the final signed hop.
+# verify_jwt is OFF because installs share no secret to gate it with; the
+# pinned apns-topic bounds what it can do (see notes/06-integrations.md).
+[functions.push-relay]
+verify_jwt = false
