@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# peer-rq — read-only SQL against a peer's database, as this owner.
+#
+# A peer is another Sylos database where this database's owner holds a
+# member token (the peers table — skills/peers). This script looks the
+# peer up by name through scripts/rq, then ships one statement to THEIR
+# member_rq. You see exactly what their silos grant this owner; a refusal
+# means their owner didn't share that.
+#
+# Usage:
+#   scripts/peer-rq alex "select lat, lng, pinged_at from location_pings order by pinged_at desc limit 1"
+#   scripts/peer-rq alex - <<'SQL'      # stdin form; avoids shell-quoting pain
+#   select id, body, created_at from manual_notes order by created_at desc limit 5
+#   SQL
+#
+# Contract at the peer: one statement, no trailing semicolon, name your
+# columns (`select *` is refused), valid inside a FROM subquery — the
+# server wraps it and returns a JSON array.
+#
+# Environment (all required — the same trio scripts/rq uses, for the
+# LOCAL lookup; the peer's credentials come from the peers row):
+#   SUPABASE_URL        https://<project-ref>.supabase.co
+#   SUPABASE_ANON_KEY   the anon / publishable key (client-public)
+#   CLAUDE_RQ_KEY       matches Vault secret claude_rq_key
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+if [ $# -lt 2 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+fi
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/03-agent-access.md"
+done
+
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+peer_name="$1"; shift
+
+if [ "$1" = "-" ]; then q=$(cat); else q="$*"; fi
+q="$(printf '%s' "$q" | sed -e 's/[[:space:];]*$//')"
+[ -n "$q" ] || die "empty query"
+
+# Resolve the peer locally. Never echo member_token beyond this call.
+peer_json=$("$script_dir/rq" - <<SQL
+select project_url, anon_key, member_token
+from peers where name = '$(printf '%s' "$peer_name" | sed "s/'/''/g")'
+SQL
+)
+count=$(printf '%s' "$peer_json" | jq 'length')
+[ "$count" = "1" ] || die "no peer named '$peer_name' — scripts/rq \"select name from peers order by name\""
+
+peer_url=$(printf '%s' "$peer_json" | jq -r '.[0].project_url')
+peer_key=$(printf '%s' "$peer_json" | jq -r '.[0].anon_key')
+peer_tok=$(printf '%s' "$peer_json" | jq -r '.[0].member_token')
+
+body=$(jq -n --arg token "$peer_tok" --arg q "$q" '{_token: $token, q: $q}')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${peer_url%/}/rest/v1/rpc/member_rq" \
+    -H "apikey: ${peer_key}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi
