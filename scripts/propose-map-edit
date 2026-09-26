@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+#
+# propose-map-edit — file one pending goal-map edit proposal, over HTTPS.
+#
+# The daily routine's map-edit path: calls the propose_map_edit RPC, which
+# switches to the `claude` role and inserts one pending agent_map_proposals
+# row. Nothing touches goal_method_cells — the owner approves or denies each
+# proposal in the app, and only an approval applies it. Identical pending
+# proposals dedupe server-side, so re-running a day is safe.
+#
+# Usage:
+#   scripts/propose-map-edit --profile <uuid> --kind update \
+#       --cell <uuid> --goal <uuid> --day 2026-09-03 \
+#       --before '{"title": "Run"}' --after '{"title": "Run 3x/week"}' \
+#       --rationale "Every run note this month says 3x/week — the cell should name the cadence."
+#
+# Flags: --profile, --kind (add|update|retire) and --rationale required.
+#   add:    --parent <uuid> (omit for a new top-level goal), --after with the
+#           new cell's {"title": ..., "notes"?: ...}
+#   update: --cell <uuid>, --after with the changed fields only
+#           ({"title"?, "notes"?, "rank"?}), --before with their current values
+#   retire: --cell <uuid>, --before with the cell's current {"title", ...}
+# --goal names the top-level goal served (for grouping in the app); --day the
+# summarized day whose data argued for the edit.
+#
+# Environment (all required; see notes/07-agent-rq-https.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+profile='' kind='' rationale='' cell='' parent='' goal='' before='' after='' day=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --profile)   profile="${2:?}";   shift 2 ;;
+        --kind)      kind="${2:?}";      shift 2 ;;
+        --rationale) rationale="${2:?}"; shift 2 ;;
+        --cell)      cell="${2:?}";      shift 2 ;;
+        --parent)    parent="${2:?}";    shift 2 ;;
+        --goal)      goal="${2:?}";      shift 2 ;;
+        --before)    before="${2:?}";    shift 2 ;;
+        --after)     after="${2:?}";     shift 2 ;;
+        --day)       day="${2:?}";       shift 2 ;;
+        -h|--help)   sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+[ -n "$profile" ] && [ -n "$kind" ] && [ -n "$rationale" ] ||
+    die "--profile, --kind and --rationale are all required"
+case "$kind" in add|update|retire) ;; *) die "--kind must be add, update or retire" ;; esac
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/07-agent-rq-https.md"
+done
+
+body=$(jq -n --arg profile "$profile" --arg kind "$kind" --arg rationale "$rationale" \
+    --arg cell "$cell" --arg parent "$parent" --arg goal "$goal" \
+    --arg before "$before" --arg after "$after" --arg day "$day" '
+    {_profile_id: $profile, _kind: $kind, _rationale: $rationale}
+    + (if $cell   != "" then {_cell_id: $cell}     else {} end)
+    + (if $parent != "" then {_parent_id: $parent} else {} end)
+    + (if $goal   != "" then {_goal_id: $goal}     else {} end)
+    + (if $before != "" then {_before: ($before | fromjson)} else {} end)
+    + (if $after  != "" then {_after:  ($after  | fromjson)} else {} end)
+    + (if $day    != "" then {_source_day: $day}   else {} end)') \
+    || die "--before and --after must be valid JSON"
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/propose_map_edit" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi

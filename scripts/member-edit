@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+#
+# member-edit — propose a change to the owner, or read your outcomes.
+#
+# The third kind of member request: where member-rq reads with SQL and
+# member-prompt queues a question, this queues a free-text edit proposal
+# through the member_submit_edit RPC. Nothing is written by you — the owner
+# applies or declines each proposal personally, optionally with a note.
+# One of your silos must have "propose edits" toggled on.
+#
+# Usage:
+#   scripts/member-edit "my phone number changed to 555-0100"
+#   scripts/member-edit -                 # stdin form for longer proposals
+#   scripts/member-edit --list            # your proposals, newest first
+#
+# Environment (all required):
+#   SUPABASE_URL        https://<project-ref>.supabase.co
+#   SUPABASE_ANON_KEY   the anon / publishable key (client-public)
+#   MEMBER_TOKEN        the personal key from the app's Member access page
+#                       (GUEST_TOKEN still honored as a fallback name)
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+if [ $# -lt 1 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+fi
+
+MEMBER_TOKEN="${MEMBER_TOKEN:-${GUEST_TOKEN:-}}"
+for v in SUPABASE_URL SUPABASE_ANON_KEY MEMBER_TOKEN; do
+    [ -n "${!v:-}" ] || die "$v is not set"
+done
+
+post() { # $1 = rpc name, $2 = json body
+    local resp status
+    if resp=$(curl -sS --fail-with-body \
+        -X POST "${SUPABASE_URL%/}/rest/v1/rpc/$1" \
+        -H "apikey: ${SUPABASE_ANON_KEY}" \
+        -H "content-type: application/json" \
+        --data "$2"); then
+        printf '%s\n' "$resp" | jq .
+    else
+        status=$?
+        printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+        exit "$status"
+    fi
+}
+
+if [ "$1" = "--list" ]; then
+    q="select id, proposal, status, response, created_at, resolved_at
+       from member_edit_requests order by created_at desc"
+    post member_rq "$(jq -n --arg token "$MEMBER_TOKEN" --arg q "$q" '{_token: $token, q: $q}')"
+    exit 0
+fi
+
+if [ "$1" = "-" ]; then proposal=$(cat); else proposal="$*"; fi
+[ -n "$(printf '%s' "$proposal" | tr -d '[:space:]')" ] || die "empty proposal"
+
+post member_submit_edit \
+    "$(jq -n --arg token "$MEMBER_TOKEN" --arg p "$proposal" '{_token: $token, _proposal: $p}')"

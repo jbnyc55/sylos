@@ -1,0 +1,22 @@
+{
+  "name": "sylos-starter",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Sylos starter: one Supabase database for your life, a native iOS app, and a scheduled Claude agent (Syla).",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:diff": "supabase db diff -f",
+    "db:lint": "supabase db lint --level warning",
+    "agent:db": "node scripts/agent-db.mjs",
+    "agent:rq": "bash scripts/rq",
+    "agent:log": "bash scripts/agent-log"
+  },
+  "devDependencies": {
+    "pg": "^8.16.3"
+  }
+}

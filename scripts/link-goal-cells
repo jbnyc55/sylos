@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+#
+# link-goal-cells — link same-concept goal map cells into one synergy
+# group, over HTTPS.
+#
+# The synergy job's write path: calls the link_goal_cells RPC, which
+# switches to the `claude` role and files one goal_cell_links group with
+# its members. Links are annotation — the cells themselves are untouched,
+# and the owner sees (and can unlink) every group on the Goal map tab,
+# where the synergy score is computed from the live rankings. Idempotent:
+# cells already grouped stay grouped, a set overlapping one existing group
+# grows that group, and a set bridging two existing groups is refused.
+#
+# Usage:
+#   scripts/link-goal-cells --profile <uuid> --label "Creatine" \
+#       --cells <uuid>,<uuid>[,<uuid>...] \
+#       --rationale "Both the lifting and the cognition maps name creatine."
+#
+# Flags: --profile, --label and --cells (2+ comma-separated
+# goal_method_cells uuids, live cells of that profile) required;
+# --rationale recommended — it shows on the card in the app.
+#
+# Environment (all required; see notes/07-agent-rq-https.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+profile='' label='' cells='' rationale=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --profile)   profile="${2:?}";   shift 2 ;;
+        --label)     label="${2:?}";     shift 2 ;;
+        --cells)     cells="${2:?}";     shift 2 ;;
+        --rationale) rationale="${2:?}"; shift 2 ;;
+        -h|--help)   sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+[ -n "$profile" ] && [ -n "$label" ] && [ -n "$cells" ] ||
+    die "--profile, --label and --cells are all required"
+
+body=$(jq -n --arg profile "$profile" --arg label "$label" \
+    --arg cells "$cells" --arg rationale "$rationale" '
+    {_profile_id: $profile, _label: $label,
+     _cell_ids: ($cells | split(",") | map(gsub("\\s"; "")) | map(select(. != "")))}
+    + (if $rationale != "" then {_rationale: $rationale} else {} end)')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/link_goal_cells" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi

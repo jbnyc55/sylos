@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+#
+# syla-set-webhook — store the Syla routine's fire credential in Vault.
+#
+# Calls the set_syla_webhook RPC, which upserts two Vault secrets —
+# syla_webhook_url and syla_webhook_token — that the pg_cron dispatcher
+# uses to fire the generic Syla routine. The server refuses any URL that
+# is not an api.anthropic.com routine fire endpoint, so the token can never
+# be redirected elsewhere.
+#
+# Usage:
+#   scripts/syla-set-webhook --url <fire-url> --token-file <file>
+#   printf '%s' "$TOKEN" | scripts/syla-set-webhook --url <fire-url> --token-file -
+#
+# The token goes through a file or stdin, never argv.
+#
+# Environment (all required; see notes/07-agent-rq-https.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+url='' token_file=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --url)        url="${2:?}"; shift 2 ;;
+        --token-file) token_file="${2:?}"; shift 2 ;;
+        -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+[ -n "$url" ] && [ -n "$token_file" ] || die "--url and --token-file are required"
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/07-agent-rq-https.md"
+done
+
+if [ "$token_file" = "-" ]; then
+    token=$(cat)
+else
+    [ -r "$token_file" ] || die "cannot read $token_file"
+    token=$(cat "$token_file")
+fi
+token=$(printf '%s' "$token" | tr -d '[:space:]')
+[ -n "$token" ] || die "the token is empty"
+
+body=$(jq -n --arg url "$url" --arg token "$token" '{_url: $url, _token: $token}')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/set_syla_webhook" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi

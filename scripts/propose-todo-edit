@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+#
+# propose-todo-edit — file one pending todo edit proposal, over HTTPS.
+#
+# The daily routine's todo-edit path: calls the propose_todo_edit RPC, which
+# switches to the `claude` role and inserts one pending agent_todo_proposals
+# row. Nothing touches the todo table — the owner approves or denies each
+# proposal in the app, and only an approval applies it. Identical pending
+# proposals dedupe server-side, so re-running a day is safe.
+#
+# Usage:
+#   scripts/propose-todo-edit --profile <uuid> --kind add \
+#       --goal <goal_method_cells uuid> --day 2026-09-03 \
+#       --after '{"title": "Prep lunch the night before", "start_date": "2026-09-05", "freq": "daily"}' \
+#       --rationale "Lunch out on 9 of the last 14 days averaged $19 — the biggest recurring spend with no todo serving it."
+#
+# Flags: --profile, --kind (add|update|retire|complete) and --rationale required.
+#   add:    --after with the new row's fields — a todo inside an event
+#           ({"title": ..., "event_id": "<event uuid>"}), a new timed
+#           event ({"title": ..., "start_time": "HH:MM", "end_time": ...,
+#           "start_date"?, "freq"?, "interval_n"?, "byweekday"?, ...}), or
+#           a free-floating todo (title plus optional start_date and
+#           recurrence, with neither times nor an event_id);
+#           --goal links it to the goal-map cell it serves
+#   update: --todo <uuid>, --after with the changed fields only, --before
+#           with their current values
+#   retire:  --todo <uuid>, --before with the todo's current {"title", ...}
+#   complete: --todo <uuid>, --after naming the day to check off in
+#             todo_done: {"day": "YYYY-MM-DD"}
+# --day is the summarized day whose data argued for the edit.
+#
+# Environment (all required; see notes/07-agent-rq-https.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+profile='' kind='' rationale='' todo='' goal='' before='' after='' day=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --profile)   profile="${2:?}";   shift 2 ;;
+        --kind)      kind="${2:?}";      shift 2 ;;
+        --rationale) rationale="${2:?}"; shift 2 ;;
+        --todo)      todo="${2:?}";      shift 2 ;;
+        --goal)      goal="${2:?}";      shift 2 ;;
+        --before)    before="${2:?}";    shift 2 ;;
+        --after)     after="${2:?}";     shift 2 ;;
+        --day)       day="${2:?}";       shift 2 ;;
+        -h|--help)   sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+[ -n "$profile" ] && [ -n "$kind" ] && [ -n "$rationale" ] ||
+    die "--profile, --kind and --rationale are all required"
+case "$kind" in add|update|retire|complete) ;; *) die "--kind must be add, update, retire or complete" ;; esac
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/07-agent-rq-https.md"
+done
+
+body=$(jq -n --arg profile "$profile" --arg kind "$kind" --arg rationale "$rationale" \
+    --arg todo "$todo" --arg goal "$goal" \
+    --arg before "$before" --arg after "$after" --arg day "$day" '
+    {_profile_id: $profile, _kind: $kind, _rationale: $rationale}
+    + (if $todo   != "" then {_todo_id: $todo}   else {} end)
+    + (if $goal   != "" then {_goal_id: $goal}   else {} end)
+    + (if $before != "" then {_before: ($before | fromjson)} else {} end)
+    + (if $after  != "" then {_after:  ($after  | fromjson)} else {} end)
+    + (if $day    != "" then {_source_day: $day} else {} end)') \
+    || die "--before and --after must be valid JSON"
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/propose_todo_edit" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi

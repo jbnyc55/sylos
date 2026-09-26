@@ -1,0 +1,74 @@
+# Local development configuration for the Supabase CLI.
+# Docs: https://supabase.com/docs/guides/local-development/cli/config
+#
+# `project_id` names the local Docker stack only. The production project this
+# repo deploys to is selected in CI by the SUPABASE_PROJECT_REF secret.
+project_id = "sylos"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.migrations]
+enabled = true
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["https://localhost:5173"]
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+
+[analytics]
+enabled = false
+
+# The Plaid edge function. verify_jwt means the platform rejects requests
+# without a valid user JWT before our code runs — the function itself then
+# resolves the caller's profile through RLS.
+[functions.plaid]
+verify_jwt = true
+
+# The Google Calendar edge function. verify_jwt is OFF because Google's OAuth
+# redirect (GET /gcal/callback) and the pg_cron sync poke (POST /gcal/sync-due)
+# arrive with no user JWT; the per-user POST routes resolve the caller's
+# profile through the Authorization header + RLS themselves, the callback
+# authenticates by its one-time state row, and sync-due is cooldown-guarded
+# (see notes/06-integrations.md).
+[functions.gcal]
+verify_jwt = false
+
+# The one-tap-setup token relay — DEVELOPER infrastructure, deployed only
+# on the Sylos developer's own project (never on a user's; without its
+# secrets it answers 500). verify_jwt is OFF because it serves the app
+# before any user project or session exists; an authorization code is
+# single-use and PKCE-bound, so the relay grants nothing by itself
+# (see notes/08-provisioning.md).
+[functions.supabase-oauth]
+verify_jwt = false

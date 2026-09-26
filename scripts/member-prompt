@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+#
+# member-prompt — queue a prompt for the owner, or read your answers.
+#
+# The other kind of member request: where member-rq runs SQL directly (for
+# silos that allow it), this queues a free-text prompt through the
+# member_submit_prompt RPC for the owner to run personally — they paste the
+# output back as the answer. One of your silos must have "propose prompts"
+# toggled on.
+#
+# Usage:
+#   scripts/member-prompt "how many workouts did I appear in this month?"
+#   scripts/member-prompt -               # stdin form for longer prompts
+#   scripts/member-prompt --list          # your requests, newest first
+#
+# Environment (all required):
+#   SUPABASE_URL        https://<project-ref>.supabase.co
+#   SUPABASE_ANON_KEY   the anon / publishable key (client-public)
+#   MEMBER_TOKEN        the personal key from the app's Member access page
+#                       (GUEST_TOKEN still honored as a fallback name)
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+if [ $# -lt 1 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+fi
+
+MEMBER_TOKEN="${MEMBER_TOKEN:-${GUEST_TOKEN:-}}"
+for v in SUPABASE_URL SUPABASE_ANON_KEY MEMBER_TOKEN; do
+    [ -n "${!v:-}" ] || die "$v is not set"
+done
+
+post() { # $1 = rpc name, $2 = json body
+    local resp status
+    if resp=$(curl -sS --fail-with-body \
+        -X POST "${SUPABASE_URL%/}/rest/v1/rpc/$1" \
+        -H "apikey: ${SUPABASE_ANON_KEY}" \
+        -H "content-type: application/json" \
+        --data "$2"); then
+        printf '%s\n' "$resp" | jq .
+    else
+        status=$?
+        printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+        exit "$status"
+    fi
+}
+
+if [ "$1" = "--list" ]; then
+    q="select id, prompt, status, response, created_at, answered_at
+       from member_prompt_requests order by created_at desc"
+    post member_rq "$(jq -n --arg token "$MEMBER_TOKEN" --arg q "$q" '{_token: $token, q: $q}')"
+    exit 0
+fi
+
+if [ "$1" = "-" ]; then prompt=$(cat); else prompt="$*"; fi
+[ -n "$(printf '%s' "$prompt" | tr -d '[:space:]')" ] || die "empty prompt"
+
+post member_submit_prompt \
+    "$(jq -n --arg token "$MEMBER_TOKEN" --arg p "$prompt" '{_token: $token, _prompt: $p}')"

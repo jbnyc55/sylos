@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+#
+# silo-ask — ask the owner where one record goes, over HTTPS.
+#
+# The siloing job's "couldn't silo" write: calls the ask_silo_help RPC,
+# which switches to the `claude` role and files an open silo ask for one
+# note (by id) or one doc (by path) — the silos Syla weighed, each with how
+# sure she is (0-100), and one specific question. It never touches the
+# record's placements. Re-asking about a record whose ask is still open
+# replaces the question and candidates in place, so re-runs are safe. The
+# owner answers on the Syla tab (Couldn't Silo).
+#
+# Usage:
+#   scripts/silo-ask --note <note-uuid> --question "…" \
+#       --candidates '[{"silo_id": "<silo-uuid>", "confidence": 65}]'
+#   scripts/silo-ask --doc <a/b/c> --question "…" --candidates '[…]'
+#
+# Flags: exactly one of --note / --doc, plus --question and --candidates
+# (a JSON array, at least one entry).
+#
+# Environment (all required; see notes/07-agent-rq-https.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+note='' doc='' question='' candidates=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --note)       note="${2:?}"; shift 2 ;;
+        --doc)        doc="${2:?}"; shift 2 ;;
+        --question)   question="${2:?}"; shift 2 ;;
+        --candidates) candidates="${2:?}"; shift 2 ;;
+        -h|--help) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+if [ -n "$note" ] && [ -n "$doc" ]; then die "give --note or --doc, not both"; fi
+[ -n "$note" ] || [ -n "$doc" ] || die "one of --note or --doc is required"
+[ -n "$question" ] || die "--question is required"
+[ -n "$candidates" ] || die "--candidates is required"
+printf '%s' "$candidates" | jq -e 'type == "array" and length > 0' >/dev/null \
+    || die "--candidates must be a non-empty JSON array"
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/07-agent-rq-https.md"
+done
+
+body=$(jq -n --arg note "$note" --arg doc "$doc" --arg question "$question" \
+    --argjson candidates "$candidates" '
+    {_note_id: (if $note == "" then null else $note end),
+     _doc_path: (if $doc == "" then null else $doc end),
+     _question: $question,
+     _candidates: $candidates}')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/ask_silo_help" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi

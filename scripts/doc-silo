@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#
+# doc-silo — set one doc's silo set, over HTTPS.
+#
+# The docs' silo-note: calls the set_doc_silos RPC, which switches to the
+# `claude` role and replaces the doc's doc_silos rows with exactly the
+# given silo ids. An empty --silos takes the doc out of every silo — it
+# then shares nowhere and no member can see it (unless named directly).
+# Idempotent, and every add/remove is captured in row_edits by trigger.
+#
+# Usage:
+#   scripts/doc-silo --path <a/b/c> --silos <silo-uuid>,<silo-uuid>
+#   scripts/doc-silo --path <a/b/c> --silos ""      # out of every silo
+#
+# Flags: both required (--silos may be an empty string).
+#
+# Environment (all required; see notes/07-agent-rq-https.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+path='' silos='' silos_set=0
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --path)  path="${2:?}"; shift 2 ;;
+        --silos) silos="${2-}"; silos_set=1; shift 2 ;;
+        -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+[ -n "$path" ] && [ "$silos_set" = 1 ] || die "--path and --silos are required"
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/07-agent-rq-https.md"
+done
+
+body=$(jq -n --arg path "$path" --arg silos "$silos" '
+    {_path: $path,
+     _silo_ids: ($silos | split(",") | map(select(length > 0)))}')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/set_doc_silos" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi

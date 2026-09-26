@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+#
+# rq — read-only SQL against the production database, over HTTPS.
+#
+# Ships one statement to the run_readonly_sql RPC; Postgres executes it as the
+# `claude` role inside a read-only transaction, so the role's grants, RLS and
+# denials are the boundary — not this script. Works from environments whose
+# egress allows HTTPS but not raw TCP on 5432 (Claude Code cloud sessions).
+#
+# Usage:
+#   scripts/rq "select count(*) from notes"
+#   scripts/rq - <<'SQL'          # stdin form; avoids shell-quoting pain
+#   select relname as table, n_live_tup as approx_rows
+#   from pg_stat_user_tables where schemaname = 'public' order by relname
+#   SQL
+#
+# Contract: one statement, no trailing semicolon, valid inside a FROM
+# subquery — the server wraps it as
+#     select coalesce(jsonb_agg(to_jsonb(t)), '[]') from (<sql>) t
+# and returns the JSON array.
+#
+# Environment (all required; see notes/07-agent-rq-https.md):
+#   SUPABASE_URL        https://<project-ref>.supabase.co
+#   SUPABASE_ANON_KEY   the anon / publishable key (client-public)
+#   CLAUDE_RQ_KEY       matches Vault secret claude_rq_key
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+if [ $# -lt 1 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+fi
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/07-agent-rq-https.md"
+done
+
+if [ "$1" = "-" ]; then q=$(cat); else q="$*"; fi
+
+# Be forgiving about one trailing semicolon; the server rejects it otherwise.
+q="$(printf '%s' "$q" | sed -e 's/[[:space:];]*$//')"
+[ -n "$q" ] || die "empty query"
+
+body=$(jq -n --arg q "$q" '{q: $q}')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/run_readonly_sql" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi

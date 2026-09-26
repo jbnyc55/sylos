@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+#
+# vibe-save — create or replace one vibe code app, over HTTPS.
+#
+# The vibes/ deploy: calls the save_vibe_code_app RPC, which switches to
+# the `claude` role and upserts the app by slug. The row_edits trigger
+# captures the before/after images server-side, so every deploy is
+# undoable regardless of what this script does. Idempotent: re-saving an
+# identical bundle is an update that changes nothing but the log.
+#
+# Usage:
+#   scripts/vibe-save --slug <slug> --name <name> --html-file <file> \
+#       [--hint <hint>] [--src-dir <dir>] [--open-to-signed-in | --owner-only]
+#   scripts/vibe-save --slug <slug> --name <name> --html-file -        # stdin
+#
+# The html must be the vibes/ build's output: a complete self-contained
+# document (leading <!doctype html>, everything inlined) — the database
+# refuses fragments and anything over 5 MB.
+#
+# --src-dir also uploads the app's SOURCE tree (every regular file under
+# the directory, paths relative to it) via save_vibe_code_app_files,
+# replacing the stored tree wholesale. The database is the app code's
+# home — editing an app later starts from these rows, not from git — so
+# passing the source dir on every deploy is the expected shape.
+#
+# --open-to-signed-in lets ANY signed-in session open the app (not just the
+# owner and its members) via set_vibe_code_app_open; --owner-only takes
+# that back. The flag is sticky — a plain redeploy leaves it as it was.
+# What an open app shows is still decided by its data tables' RLS.
+#
+# Environment (all required; see notes/07-agent-rq-https.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+slug='' name='' hint='' html_file='' src_dir='' open=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --slug)      slug="${2:?}"; shift 2 ;;
+        --name)      name="${2:?}"; shift 2 ;;
+        --hint)      hint="${2:?}"; shift 2 ;;
+        --html-file) html_file="${2:?}"; shift 2 ;;
+        --src-dir)   src_dir="${2:?}"; shift 2 ;;
+        --open-to-signed-in) open=true; shift ;;
+        --owner-only)        open=false; shift ;;
+        -h|--help) sed -n '2,32p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+[ -n "$slug" ] && [ -n "$name" ] && [ -n "$html_file" ] \
+    || die "--slug, --name and --html-file are required"
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/07-agent-rq-https.md"
+done
+
+# The html goes through files, not argv — a bundle far exceeds ARG_MAX.
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+
+if [ "$html_file" = "-" ]; then
+    cat > "$tmpdir/app.html"
+else
+    [ -r "$html_file" ] || die "cannot read $html_file"
+    cat "$html_file" > "$tmpdir/app.html"
+fi
+
+jq -n --arg slug "$slug" --arg name "$name" --arg hint "$hint" \
+    --rawfile html "$tmpdir/app.html" \
+    '{_slug: $slug, _name: $name, _hint: $hint, _html: $html}' > "$tmpdir/body.json"
+
+rpc() {
+    # rpc <name> <body-file> — POST one RPC, pretty-print the response.
+    local resp status
+    if resp=$(curl -sS --fail-with-body \
+        -X POST "${SUPABASE_URL%/}/rest/v1/rpc/$1" \
+        -H "apikey: ${SUPABASE_ANON_KEY}" \
+        -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+        -H "content-type: application/json" \
+        --data @"$2"); then
+        printf '%s\n' "$resp" | jq .
+    else
+        status=$?
+        printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+        exit "$status"
+    fi
+}
+
+rpc save_vibe_code_app "$tmpdir/body.json"
+
+if [ -n "$src_dir" ]; then
+    [ -d "$src_dir" ] || die "cannot read directory $src_dir"
+    # Every regular file, path relative to the dir, content as text. The
+    # database's path check refuses anything odd (node_modules never
+    # belongs in an app folder anyway).
+    (cd "$src_dir" && find . -type f | sed 's|^\./||' | sort) > "$tmpdir/paths"
+    [ -s "$tmpdir/paths" ] || die "$src_dir contains no files"
+    : > "$tmpdir/files.jsonl"
+    while IFS= read -r p; do
+        jq -n --arg path "$p" --rawfile content "$src_dir/$p" \
+            '{path: $path, content: $content}' >> "$tmpdir/files.jsonl"
+    done < "$tmpdir/paths"
+    jq -n --arg slug "$slug" --slurpfile files "$tmpdir/files.jsonl" \
+        '{_slug: $slug, _files: $files}' > "$tmpdir/src.json"
+    rpc save_vibe_code_app_files "$tmpdir/src.json"
+fi
+
+if [ -n "$open" ]; then
+    jq -n --arg slug "$slug" --argjson open "$open" \
+        '{_slug: $slug, _open: $open}' > "$tmpdir/open.json"
+    rpc set_vibe_code_app_open "$tmpdir/open.json"
+fi

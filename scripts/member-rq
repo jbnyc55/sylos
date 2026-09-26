@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+#
+# member-rq — read-only SQL as a member, over HTTPS.
+#
+# The members' rq: ships one statement to the member_rq RPC, which resolves
+# MEMBER_TOKEN to a member identity and executes as the `member` role inside
+# a read-only transaction. A member sees the jots and docs sitting in silos
+# where their own membership allows SQL (or naming them directly), those
+# silos, and their own member, membership and request rows — nothing else.
+# Grants are column-scoped, so name your columns: `select *` is refused. If
+# none of your memberships allows SQL, queue a prompt with
+# scripts/member-prompt instead.
+#
+# Usage:
+#   scripts/member-rq "select id, body, created_at from manual_notes order by created_at desc limit 20"
+#   scripts/member-rq - <<'SQL'         # stdin form; avoids shell-quoting pain
+#   select n.body, n.created_at, s.name as silo
+#   from manual_notes n
+#   join note_silos j on j.note_id = n.id
+#   join silos s on s.id = j.silo_id
+#   order by n.created_at desc
+#   SQL
+#
+# Contract: one statement, no trailing semicolon, valid inside a FROM
+# subquery — the server wraps it and returns a JSON array.
+#
+# Environment (all required):
+#   SUPABASE_URL        https://<project-ref>.supabase.co
+#   SUPABASE_ANON_KEY   the anon / publishable key (client-public)
+#   MEMBER_TOKEN        the personal key from the app's Member access page
+#                       (GUEST_TOKEN still honored as a fallback name)
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+if [ $# -lt 1 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+fi
+
+MEMBER_TOKEN="${MEMBER_TOKEN:-${GUEST_TOKEN:-}}"
+for v in SUPABASE_URL SUPABASE_ANON_KEY MEMBER_TOKEN; do
+    [ -n "${!v:-}" ] || die "$v is not set"
+done
+
+if [ "$1" = "-" ]; then q=$(cat); else q="$*"; fi
+
+# Be forgiving about one trailing semicolon; the server rejects it otherwise.
+q="$(printf '%s' "$q" | sed -e 's/[[:space:];]*$//')"
+[ -n "$q" ] || die "empty query"
+
+body=$(jq -n --arg token "$MEMBER_TOKEN" --arg q "$q" '{_token: $token, q: $q}')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/member_rq" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi

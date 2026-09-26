@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+#
+# log-lift — insert one weight_lifts row, over HTTPS.
+#
+# The daily routine's write for lifts found in notes: calls the
+# log_weight_lift RPC, which switches to the `claude` role and appends one
+# row. The role's grant is column-scoped (profile_id, lift, weight_lb, reps,
+# lifted_on) with no update or delete. NOT idempotent — one call is one set,
+# and identical sets are legitimate — so the caller reads the day's existing
+# rows first and only logs what is missing (see skills/../daily-summary).
+#
+# Usage:
+#   scripts/log-lift --profile <uuid> --lift "Bench press" --weight 185 \
+#       --day 2026-08-31 [--reps 5]
+#
+# Flags: --profile, --lift, --weight (pounds) and --day required; --reps
+# optional.
+#
+# Environment (all required; see notes/07-agent-rq-https.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+profile='' lift='' weight='' day='' reps=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --profile) profile="${2:?}"; shift 2 ;;
+        --lift)    lift="${2:?}";    shift 2 ;;
+        --weight)  weight="${2:?}";  shift 2 ;;
+        --day)     day="${2:?}";     shift 2 ;;
+        --reps)    reps="${2:?}";    shift 2 ;;
+        -h|--help) sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+[ -n "$profile" ] && [ -n "$lift" ] && [ -n "$weight" ] && [ -n "$day" ] ||
+    die "--profile, --lift, --weight and --day are all required"
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/07-agent-rq-https.md"
+done
+
+body=$(jq -n --arg profile "$profile" --arg lift "$lift" \
+    --arg weight "$weight" --arg day "$day" --arg reps "$reps" '
+    {_profile_id: $profile,
+     _lift: $lift,
+     _weight_lb: ($weight | tonumber),
+     _lifted_on: $day,
+     _reps: (if $reps == "" then null else ($reps | tonumber) end)}') \
+    || die "--weight and --reps must be numbers"
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/log_weight_lift" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi

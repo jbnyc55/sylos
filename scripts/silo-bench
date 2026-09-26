@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+#
+# silo-bench — let a siloing bot take Silo Bench, over HTTPS.
+#
+# Silo Bench (supabase/migrations/20261008000000_silo_bench.sql) is the
+# eval for the siloing job: fixed cases, each a record plus a snapshot of
+# the silos to judge it against, with the right outcome per silo
+# (place / leave / ask). A bot takes it in four steps:
+#
+#   scripts/silo-bench cases                      # the active cases, JSON
+#   scripts/silo-bench start --bot <name> [--notes <text>]    # → run_id
+#   scripts/silo-bench record --run <run-id> --case <case-id> \
+#       --predicted '{"besties":"place","investors":"ask"}' [--reasoning <text>]
+#   scripts/silo-bench finish --run <run-id>      # → the run's scoreboard
+#
+# Judge each case ONLY from its own record_text and silos (names and
+# descriptions), exactly as the siloing job would — never from the
+# expected answers, which `cases` leaves out. A silo left out of
+# --predicted counts as "leave". record grades the answer immediately and
+# may be re-run for the same case while the run is open.
+#
+# Environment (all required; see notes/07-agent-rq-https.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/07-agent-rq-https.md"
+done
+
+rpc() {
+    # rpc <name> <json-body> — POST one RPC, pretty-print the response.
+    local resp status
+    if resp=$(curl -sS --fail-with-body \
+        -X POST "${SUPABASE_URL%/}/rest/v1/rpc/$1" \
+        -H "apikey: ${SUPABASE_ANON_KEY}" \
+        -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+        -H "content-type: application/json" \
+        --data "$2"); then
+        printf '%s\n' "$resp" | jq .
+    else
+        status=$?
+        printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+        exit "$status"
+    fi
+}
+
+cmd="${1:-}"; shift || true
+bot='' notes='' run='' case_id='' predicted='' reasoning=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --bot)       bot="${2:?}"; shift 2 ;;
+        --notes)     notes="${2:?}"; shift 2 ;;
+        --run)       run="${2:?}"; shift 2 ;;
+        --case)      case_id="${2:?}"; shift 2 ;;
+        --predicted) predicted="${2:?}"; shift 2 ;;
+        --reasoning) reasoning="${2:?}"; shift 2 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+here=$(dirname "$0")
+
+case "$cmd" in
+    cases)
+        # The answer key stays out: each silo's name and description only.
+        "$here/rq" "select id, title, record_kind, record_text,
+                           (select jsonb_agg(jsonb_build_object(
+                                       'name', s->>'name',
+                                       'description', s->'description'))
+                            from jsonb_array_elements(silos) s) as silos
+                    from silo_bench_cases where active order by created_at"
+        ;;
+    start)
+        [ -n "$bot" ] || die "start needs --bot"
+        rpc silo_bench_start_run "$(jq -n --arg b "$bot" --arg n "$notes" '{_bot: $b, _notes: $n}')"
+        ;;
+    record)
+        [ -n "$run" ] && [ -n "$case_id" ] && [ -n "$predicted" ] \
+            || die "record needs --run, --case and --predicted"
+        printf '%s' "$predicted" | jq -e 'type == "object"' >/dev/null \
+            || die "--predicted must be a JSON object"
+        rpc silo_bench_record "$(jq -n --arg r "$run" --arg c "$case_id" \
+            --argjson p "$predicted" --arg why "$reasoning" \
+            '{_run: $r, _case: $c, _predicted: $p, _reasoning: $why}')"
+        ;;
+    finish)
+        [ -n "$run" ] || die "finish needs --run"
+        rpc silo_bench_finish_run "$(jq -n --arg r "$run" '{_run: $r}')"
+        ;;
+    *)
+        sed -n '2,27p' "$0" | sed 's/^# \{0,1\}//'
+        exit 1
+        ;;
+esac

@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#
+# doc-delete — remove one doc, over HTTPS.
+#
+# Calls the delete_doc RPC as the `claude` role. Recoverable by design:
+# the row_edits trigger stores the full row before the delete commits, and
+# restoring is saving old_row back (scripts/doc-save, or the app's history
+# view). Fails if no doc exists at the path.
+#
+# Usage:
+#   scripts/doc-delete --path <a/b/c>
+#
+# Environment (all required; see notes/07-agent-rq-https.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+path=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --path) path="${2:?}"; shift 2 ;;
+        -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+[ -n "$path" ] || die "--path is required"
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/07-agent-rq-https.md"
+done
+
+body=$(jq -n --arg path "$path" '{_path: $path}')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/delete_doc" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi

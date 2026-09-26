@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+#
+# revise-todo-edit — rewrite one flagged todo proposal, over HTTPS.
+#
+# The edit-feedback loop's todo write path: calls the revise_todo_edit RPC,
+# which switches to the `claude` role and updates one agent_todo_proposals
+# row the owner flagged with Request changes (status changes_requested).
+# A revision restates the WHOLE edit — kind, target, snapshots, rationale —
+# and sends the row back to pending for a fresh review; --withdraw instead
+# resolves it as withdrawn (the feedback read as "drop the idea"). Only a
+# changes_requested row moves, so a replayed call errors rather than
+# double-writes. Nothing here touches public.todo.
+#
+# Usage:
+#   scripts/revise-todo-edit --id <proposal_uuid> --kind update \
+#       --todo <uuid> --goal <uuid> \
+#       --before '{"freq": "daily"}' \
+#       --after '{"freq": "weekly", "byweekday": [1, 4]}' \
+#       --rationale "Revised per feedback: twice a week, not daily."
+#   scripts/revise-todo-edit --id <proposal_uuid> --withdraw
+#
+# Flags: --id required. Either --withdraw, or --kind (add|update|retire|complete) and
+# --rationale plus the edit's fields, exactly as propose-todo-edit takes them:
+#   add:    --after with the row's fields (title required; an in-event todo
+#           carries "event_id", a new event carries times, a free-floating
+#           todo neither)
+#   update: --todo <uuid>, --after (changed fields), --before (their values)
+#   retire:   --todo <uuid>, --before (at least {"title": ...})
+#   complete: --todo <uuid>, --after with the day to check off ({"day": ...})
+# Omitted fields are cleared, not kept — restate everything the revised edit
+# needs, --goal included.
+#
+# Environment (all required; see notes/07-agent-rq-https.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+id='' kind='' rationale='' todo='' goal='' before='' after='' withdraw=false
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --id)        id="${2:?}";        shift 2 ;;
+        --withdraw)  withdraw=true;      shift ;;
+        --kind)      kind="${2:?}";      shift 2 ;;
+        --rationale) rationale="${2:?}"; shift 2 ;;
+        --todo)      todo="${2:?}";      shift 2 ;;
+        --goal)      goal="${2:?}";      shift 2 ;;
+        --before)    before="${2:?}";    shift 2 ;;
+        --after)     after="${2:?}";     shift 2 ;;
+        -h|--help)   sed -n '2,33p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+[ -n "$id" ] || die "--id is required"
+if [ "$withdraw" = false ]; then
+    [ -n "$kind" ] && [ -n "$rationale" ] ||
+        die "--kind and --rationale are required (or pass --withdraw)"
+    case "$kind" in add|update|retire|complete) ;; *) die "--kind must be add, update, retire or complete" ;; esac
+fi
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/07-agent-rq-https.md"
+done
+
+body=$(jq -n --arg id "$id" --argjson withdraw "$withdraw" \
+    --arg kind "$kind" --arg rationale "$rationale" \
+    --arg todo "$todo" --arg goal "$goal" \
+    --arg before "$before" --arg after "$after" '
+    {_id: $id, _withdraw: $withdraw}
+    + (if $kind      != "" then {_kind: $kind}           else {} end)
+    + (if $rationale != "" then {_rationale: $rationale} else {} end)
+    + (if $todo      != "" then {_todo_id: $todo}        else {} end)
+    + (if $goal      != "" then {_goal_id: $goal}        else {} end)
+    + (if $before    != "" then {_before: ($before | fromjson)} else {} end)
+    + (if $after     != "" then {_after:  ($after  | fromjson)} else {} end)') \
+    || die "--before and --after must be valid JSON"
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/revise_todo_edit" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi
