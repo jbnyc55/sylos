@@ -17,6 +17,7 @@ password, or key checked into this repo, rotate it immediately.
 | [`06-integrations.md`](06-integrations.md) | Integrations: the database-driven registry (new web integrations without an app update), Google Calendar's shared PKCE OAuth client and cron-synced mirror, and the phone-native ones — location, contacts, Apple Calendar & Reminders, Health, and push notifications. |
 | [`07-user-tables.md`](07-user-tables.md) | User tables: the owner's own tables ("put this CSV into a table"), proposed by Syla, approved in the app, created by a sandboxed role — no fork, no merge. |
 | [`08-provisioning.md`](08-provisioning.md) | One-tap provisioning: the user creates only a Supabase account; the app creates the project, applies migrations from the fork, and stores Syla's key — via the Management API and a tiny OAuth relay. |
+| [`09-hosted-trial.md`](09-hosted-trial.md) | The hosted trial: onboarding's "try hosted Syla" — one account on a Sylos-run starter install, marked Trial everywhere, the move to your own, and the one schema knob (`hosted_trial`) that lets trials ask Syla. |
 
 ## The thirty-second version
 
