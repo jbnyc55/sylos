@@ -20,10 +20,13 @@ the whole system; the app is bound by the same rules.
 
 There is deliberately no `.github/workflows/` and no web hosting. Merging
 to `main` migrates production either way, by one of two runners: on
-one-tap installs the app itself applies `supabase/migrations/` from the
-fork over the Management API (on provisioning and on every launch —
-`notes/08-provisioning.md`); on manual installs Supabase's GitHub
-integration watches the repo and does the same on merge.
+one-tap installs the app itself applies `supabase/migrations/` and
+deploys `supabase/functions/` from the fork over the Management API (on
+provisioning and on every launch — `notes/08-provisioning.md`); on manual
+installs Supabase's GitHub integration watches the repo and applies
+migrations on merge (edge functions are deployed with
+`supabase functions deploy <slug>` there, or by any launch of a
+one-tap-connected app).
 The client is the iOS app: built in Xcode, distributed through
 TestFlight/App Store, deployed nowhere. A change to `notes/` costs zero
 deploys.

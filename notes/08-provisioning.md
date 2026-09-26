@@ -31,9 +31,18 @@ function, `supabase/functions/supabase-oauth/`.
    starter repo), applies each unapplied file in filename order through
    `POST /v1/projects/{ref}/database/query`, one transaction per file,
    and records it in `public.applied_migrations`.
-5. **Syla's key** — the same rq key the agent step shows is written to
+5. **Edge functions** — the app is the function deployer too: each flat
+   directory under `supabase/functions/` (skipping `supabase-oauth`,
+   the developer relay that never belongs on a user project) goes up
+   through `POST /v1/projects/{ref}/functions/deploy`, with `verify_jwt`
+   read from `supabase/config.toml`. `public.deployed_functions` keeps
+   each slug's source fingerprint, so unchanged functions cost nothing —
+   and like migrations, this re-runs quietly on every launch, which is
+   how a merged function change (gcal, push, one of Syla's) reaches
+   projects already provisioned.
+6. **Syla's key** — the same rq key the agent step shows is written to
    the vault (`claude_rq_key`) directly; the SQL-editor step disappears.
-6. **App keys** — `GET /v1/projects/{ref}/api-keys` supplies the
+7. **App keys** — `GET /v1/projects/{ref}/api-keys` supplies the
    client (anon/publishable) key; the app configures itself.
 
 The migration source is read anonymously from the GitHub API, so **the
