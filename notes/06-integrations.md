@@ -209,8 +209,20 @@ Syla (and later, database triggers) can reach the owner's pocket.
   (Edge Functions → Secrets): `APNS_TEAM_ID`, `APNS_KEY_ID`,
   `APNS_PRIVATE_KEY` (the `.p8` contents; `APNS_TOPIC` optional, default
   `com.sylos.Sylos`). They come from an APNs Auth Key created in the
-  Apple Developer account (Certificates → Keys). Until they're set,
-  queued rows simply wait — nothing fails permanently.
+  app author's Apple Developer account (Certificates → Keys) — APNs
+  keys are bound to the app's bundle id, so owners cannot mint their
+  own. Until they're set, queued rows simply wait — nothing fails
+  permanently.
+- **A deliberate trade**: the signing key sits in each install's own
+  project, next to the queue it signs for, so notification content
+  never transits anyone else's infrastructure — the self-sovereign
+  reading, chosen over a central relay on the author's project. The
+  cost is that every project owner holding the secrets holds the app's
+  APNs key (project owners can read their own Edge Function secrets),
+  so the key is treated as semi-public: its worst abuse is sending
+  pushes dressed as the app to tokens the abuser can obtain (each
+  owner's tokens live behind their own RLS), and the remedy is
+  revoking and rotating the key in the Apple Developer account.
 
 The app-side permission strings for all of these live in the app repo's
 `Info.plist`; push and HealthKit also need their entitlements
