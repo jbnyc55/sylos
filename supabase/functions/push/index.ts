@@ -57,7 +57,7 @@ const APNS_HOSTS = {
 function relayURL(): string {
   return (
     Deno.env.get('PUSH_RELAY_URL') ??
-    'https://hltltdjtxeazxthuglyt.supabase.co/functions/v1/push-relay'
+    'https://sxejvymsisfheqzmofcj.supabase.co/functions/v1/push-relay'
   )
 }
 

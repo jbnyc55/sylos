@@ -72,8 +72,10 @@ first step and signing in to the trial again cancels the move.
 5. Put the project's URL and publishable key in the app's
    `HostedConfig`; the build then shows the hosted card.
 
-The relay project the app already trusts (`supabase-oauth`, `push-relay`
-— [`08-provisioning.md`](08-provisioning.md)) is the natural home: it is
-the company's, and it is what `HostedConfig` points at today. It holds
-no schema yet — step 1 above is still owed before the first trial can
-sign up.
+The hosted project should be a fresh project named `sylos` in the
+company's organization — not the company's main project (it runs the
+company schema, not this starter's) and not the relays' host. What
+`HostedConfig` points at today is a placeholder: the bare project the
+relays were first deployed on, which lives on another account and holds
+no schema. Replace it with the real hosted project's URL and key once
+step 1 above is done; until then the trial card cannot sign anyone up.

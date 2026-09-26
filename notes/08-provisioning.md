@@ -103,6 +103,24 @@ file is inert (no secrets → every call answers 500).
    offers only the manual route — so an unconfigured build degrades
    gracefully.
 
+For Sylos itself, both relays (`supabase-oauth` and `push-relay`) live
+on the company's main project — `sxejvymsisfheqzmofcj`, the one behind
+getsylos.com, in the same organization that publishes the OAuth app —
+so they sit inside the account chain the company already guards
+(sylos-company `notes/01-accounts.md`). Redeploying them from this
+checkout:
+
+```
+supabase functions deploy supabase-oauth --project-ref sxejvymsisfheqzmofcj --no-verify-jwt
+supabase functions deploy push-relay     --project-ref sxejvymsisfheqzmofcj --no-verify-jwt
+supabase secrets set --project-ref sxejvymsisfheqzmofcj \
+    SUPA_OAUTH_CLIENT_ID=<client id> SUPA_OAUTH_CLIENT_SECRET=<secret> \
+    APNS_TEAM_ID=<team> APNS_KEY_ID=<key id> APNS_PRIVATE_KEY="$(cat AuthKey.p8)"
+```
+
+The `push` function every install runs defaults its relay hop to that
+host too (`PUSH_RELAY_URL` overrides it).
+
 ## Trust story
 
 - The Management API token acts **as the user**, on their own account —
