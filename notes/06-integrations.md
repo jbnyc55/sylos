@@ -6,8 +6,9 @@ profile → **Integrations**. The page has two halves:
 - **Web integrations** — rows in `public.integrations`, not app code. The
   app renders whatever the registry holds, so a new one needs **no app
   update**: ask Syla, she builds it, it appears.
-- **This phone** — integrations that need native code (location sharing),
-  which ship with the app.
+- **This phone** — integrations that need native code (location sharing,
+  contacts, Apple Calendar & Reminders, Health, notifications), which
+  ship with the app.
 
 ## The pattern
 
@@ -151,3 +152,66 @@ the device-key model and the RPCs are documented in migration
 
 The location permission strings and the `location` background mode live
 in the app repo's `Info.plist`.
+
+## The other phone mirrors (contacts, Apple Calendar & Reminders, Health)
+
+Three more sources locked to the device — CNContactStore, EventKit and
+HealthKit have no server APIs — so the app is the sync engine for each,
+and they all generalize location's device-key model through one shared
+table (`phone_devices`, migration `20261021000000`): enabling an
+integration trades the session once for a key scoped to exactly that
+mirror (`register_phone_device`), uploads authenticate with the key alone
+(so background batches never touch the rotating session), and turning the
+integration off or signing out retires it (`forget_phone_device`). Every
+mirror is read-only — nothing ever writes back to the phone's frameworks —
+and follows the user_locations visibility sentence: each person reads
+their own rows, the owner reads everyone's, Syla reads everything.
+
+- **Contacts** (`device_contacts`, scope `contacts`) — the whole address
+  book (names, org, labeled phones/emails/addresses, birthdays; never
+  notes or photos), wholesale-replaced by `record_contacts` when iOS
+  posts a contacts-changed notification or the mirror has gone stale.
+  What lets Syla resolve "dinner with Sam" and see birthdays coming.
+- **Apple Calendar & Reminders** (`apple_event` + `apple_reminder`, one
+  scope `eventkit`) — everything the phone's Calendar app fronts (iCloud,
+  Exchange, CalDAV, subscribed) over the same −7/+62-day window as gcal,
+  in `gcal_event`'s exact shape so the Today grid and Syla's plans treat
+  both sources alike; plus Reminders (incomplete + recently completed).
+  Wholesale-replaced on `EKEventStoreChanged` and stale foregrounds by
+  `record_apple_events` / `record_apple_reminders`.
+- **Health** (`health_samples`, scope `health`) — steps, heart rate,
+  weight, sleep stages, workouts, energy, distance as append-only rows
+  keyed by HealthKit's own sample UUID, so `record_health_samples` is
+  idempotent. HealthKit background delivery wakes the app when new data
+  lands; anchored queries make each upload the delta since the last.
+  Rollups stay Syla's job — raw samples now, aggregation later.
+
+## Notifications (`push`)
+
+The one integration that is a delivery channel rather than a data source:
+Syla (and later, database triggers) can reach the owner's pocket.
+
+- **The phone registers itself**: enabling notifications in the app
+  (profile → Integrations → Notifications) registers the APNs device
+  token through `register_push_device` — a foreground write, so the JWT
+  suffices and no device key is involved. Tokens are addresses, not
+  credentials: delivering to one requires the APNs signing key, which
+  only the push edge function's secrets hold.
+- **`push_queue` is the outbox**: Syla appends through the rq-gated
+  `queue_push` (`scripts/push-send`, skill doc `skills/push`); the row's
+  `sent_at`/`failed_at` is the delivery receipt.
+- **Delivery is `supabase/functions/push/`**: an insert trigger pokes its
+  `/push/send-due` route the moment a row is queued (Vault-pinned URL,
+  gcal's arrangement) and an every-minute pg_cron sweeper retries what
+  the poke raced past. Dead tokens (APNs 410) delete their device row;
+  a row with no devices fails fast with "notifications are not enabled".
+- **Setup is three secrets**, set once by the owner in the dashboard
+  (Edge Functions → Secrets): `APNS_TEAM_ID`, `APNS_KEY_ID`,
+  `APNS_PRIVATE_KEY` (the `.p8` contents; `APNS_TOPIC` optional, default
+  `com.sylos.Sylos`). They come from an APNs Auth Key created in the
+  Apple Developer account (Certificates → Keys). Until they're set,
+  queued rows simply wait — nothing fails permanently.
+
+The app-side permission strings for all of these live in the app repo's
+`Info.plist`; push and HealthKit also need their entitlements
+(`aps-environment`, `com.apple.developer.healthkit`) in the app target.

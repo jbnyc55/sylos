@@ -64,6 +64,14 @@ verify_jwt = true
 [functions.gcal]
 verify_jwt = false
 
+# The push delivery function. verify_jwt is OFF because the push_queue
+# trigger's and the push-send cron's pokes (POST /push/send-due) arrive with
+# no user JWT; send-due only delivers rows already queued, and the per-user
+# routes (/status, /test) resolve the caller through the Authorization
+# header + RLS themselves (see notes/06-integrations.md).
+[functions.push]
+verify_jwt = false
+
 # The one-tap-setup token relay — DEVELOPER infrastructure, deployed only
 # on the Sylos developer's own project (never on a user's; without its
 # secrets it answers 500). verify_jwt is OFF because it serves the app
