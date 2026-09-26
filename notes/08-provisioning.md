@@ -32,8 +32,9 @@ function, `supabase/functions/supabase-oauth/`.
    `POST /v1/projects/{ref}/database/query`, one transaction per file,
    and records it in `public.applied_migrations`.
 5. **Edge functions** — the app is the function deployer too: each flat
-   directory under `supabase/functions/` (skipping `supabase-oauth`,
-   the developer relay that never belongs on a user project) goes up
+   directory under `supabase/functions/` (skipping the developer-only
+   relays `supabase-oauth` and `push-relay`, which never belong on a
+   user project) goes up
    through `POST /v1/projects/{ref}/functions/deploy`, with `verify_jwt`
    read from `supabase/config.toml`. `public.deployed_functions` keeps
    each slug's source fingerprint, so unchanged functions cost nothing —

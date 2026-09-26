@@ -19,11 +19,20 @@
 // status/test resolve the caller through the Authorization header + RLS
 // like gcal's per-user routes.
 //
-// Secrets (Edge Functions → Secrets, set by the owner once):
+// The signed hop: APNs keys are bound to the app's bundle id, so only the
+// app's developer holds one — a fresh install has no key and cannot mint
+// one. By default, delivery therefore hands the final signed send to the
+// developer's push relay (supabase/functions/push-relay/, deployed only
+// on the developer's project), which is what makes push work on every
+// TestFlight install with zero setup. An owner who prefers fully
+// self-sovereign delivery sets the APNS_* secrets on their OWN project
+// (Edge Functions → Secrets) and this function then signs and sends
+// directly, never touching the relay:
 //   APNS_TEAM_ID      the Apple Developer team id
 //   APNS_KEY_ID       the APNs auth key's id
 //   APNS_PRIVATE_KEY  the .p8 file's contents (PEM, PKCS8)
 //   APNS_TOPIC        optional; the app's bundle id, default com.sylos.Sylos
+//   PUSH_RELAY_URL    optional; overrides the default relay
 //
 // Which APNs host a token gets is the device row's environment column:
 // 'sandbox' for Xcode builds, 'production' for TestFlight/App Store.
@@ -42,6 +51,15 @@ const APNS_HOSTS = {
   production: 'https://api.push.apple.com',
   sandbox: 'https://api.sandbox.push.apple.com',
 } as const
+
+/** The developer's push relay — the default signed hop for installs that
+ * hold no APNs key of their own (which is all of them, out of the box). */
+function relayURL(): string {
+  return (
+    Deno.env.get('PUSH_RELAY_URL') ??
+    'https://hltltdjtxeazxthuglyt.supabase.co/functions/v1/push-relay'
+  )
+}
 
 function json(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
@@ -120,9 +138,13 @@ type QueueRow = {
 
 type Device = { id: string; apns_token: string; environment: 'production' | 'sandbox' }
 
-/** One APNs send. Returns null on success, the error string otherwise;
- * 'gone' means the token is dead and its row should be deleted. */
+/** One APNs send — directly when this project holds its own APNs key,
+ * through the developer's relay otherwise. Returns null on success, the
+ * error string otherwise; 'gone' means the token is dead and its row
+ * should be deleted. */
 async function sendToDevice(device: Device, row: QueueRow): Promise<string | null> {
+  if (!configured()) return await sendViaRelay(device, row)
+
   const payload: Record<string, unknown> = {
     aps: { alert: { title: row.title, body: row.body || undefined }, sound: 'default' },
   }
@@ -144,6 +166,31 @@ async function sendToDevice(device: Device, row: QueueRow): Promise<string | nul
   const reason = (body as { reason?: string }).reason ?? `HTTP ${res.status}`
   // 410 Unregistered (and its 400 twin BadDeviceToken): the token is dead.
   if (res.status === 410 || reason === 'BadDeviceToken' || reason === 'Unregistered') {
+    return 'gone'
+  }
+  return reason
+}
+
+/** The relay does the signing; this project never sees the key. */
+async function sendViaRelay(device: Device, row: QueueRow): Promise<string | null> {
+  const res = await fetch(`${relayURL()}/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      device_token: device.apns_token,
+      environment: device.environment,
+      title: row.title,
+      body: row.body,
+      url: row.url ?? undefined,
+    }),
+  })
+  if (res.ok) return null
+
+  const body = await res.json().catch(() => ({}))
+  const reason =
+    (body as { reason?: string }).reason ?? `relay HTTP ${res.status}`
+  const status = (body as { status?: number }).status
+  if (status === 410 || reason === 'BadDeviceToken' || reason === 'Unregistered') {
     return 'gone'
   }
   return reason
@@ -195,11 +242,6 @@ async function deliverRow(admin: Admin, row: QueueRow): Promise<'sent' | 'failed
     .is('failed_at', null)
     .select('id')
   if (!claimed?.length) return 'pending'
-
-  if (!configured()) {
-    // Leave the queue pending: rows deliver once the secrets are set.
-    return await fail('APNs secrets are not configured (Edge Functions → Secrets)', false)
-  }
 
   const { data: devices, error } = await admin
     .from('push_devices')
@@ -296,17 +338,14 @@ Deno.serve(async (req) => {
         enabled: (count ?? 0) > 0,
         devices: count ?? 0,
         configured: configured(),
+        // 'own-key' when this project signs its own sends; 'relay' when
+        // the developer's relay does (the zero-setup default).
+        mode: configured() ? 'own-key' : 'relay',
       })
     }
 
     if (route === 'test') {
       await registerSendUrl(admin)
-      if (!configured()) {
-        return json(500, {
-          error:
-            'APNs is not configured — set APNS_TEAM_ID, APNS_KEY_ID and APNS_PRIVATE_KEY in Edge Function secrets.',
-        })
-      }
       // Straight to APNs, no queue row: the answer should say whether THIS
       // phone got THIS push, not whether a row was enqueued.
       const { data: devices, error } = await admin

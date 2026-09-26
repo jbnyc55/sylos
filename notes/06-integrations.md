@@ -205,24 +205,34 @@ Syla (and later, database triggers) can reach the owner's pocket.
   gcal's arrangement) and an every-minute pg_cron sweeper retries what
   the poke raced past. Dead tokens (APNs 410) delete their device row;
   a row with no devices fails fast with "notifications are not enabled".
-- **Setup is three secrets**, set once by the owner in the dashboard
-  (Edge Functions → Secrets): `APNS_TEAM_ID`, `APNS_KEY_ID`,
-  `APNS_PRIVATE_KEY` (the `.p8` contents; `APNS_TOPIC` optional, default
-  `com.sylos.Sylos`). They come from an APNs Auth Key created in the
-  app author's Apple Developer account (Certificates → Keys) — APNs
-  keys are bound to the app's bundle id, so owners cannot mint their
-  own. Until they're set, queued rows simply wait — nothing fails
-  permanently.
-- **A deliberate trade**: the signing key sits in each install's own
-  project, next to the queue it signs for, so notification content
-  never transits anyone else's infrastructure — the self-sovereign
-  reading, chosen over a central relay on the author's project. The
-  cost is that every project owner holding the secrets holds the app's
-  APNs key (project owners can read their own Edge Function secrets),
-  so the key is treated as semi-public: its worst abuse is sending
-  pushes dressed as the app to tokens the abuser can obtain (each
-  owner's tokens live behind their own RLS), and the remedy is
-  revoking and rotating the key in the Apple Developer account.
+- **The signed hop goes through the developer's push relay by
+  default** (`supabase/functions/push-relay/` — developer
+  infrastructure like `supabase-oauth`, deployed only on the author's
+  project, skipped by the app's function deployer). APNs signing keys
+  are bound to the app's bundle id, so only the author can hold one,
+  and it must never reach a user's project (owners can read their own
+  Edge Function secrets) or the app binary. The relay is what makes
+  push work on every TestFlight install with zero setup: each
+  install's own `push` function drains its own queue and hands the
+  relay only the final send (`{device_token, environment, title,
+  body, url}`). The relay's topic is pinned to the app's bundle id
+  and it keeps no state; the trade is that notification content
+  transits the author's project on its way to Apple.
+- **Self-sovereign override**: an owner who would rather nothing
+  transit the author's infrastructure sets `APNS_TEAM_ID`,
+  `APNS_KEY_ID` and `APNS_PRIVATE_KEY` on their *own* project
+  (Edge Functions → Secrets; `APNS_TOPIC` optional, default
+  `com.sylos.Sylos`) — their `push` function then signs and sends
+  directly and never calls the relay. Practically that means bringing
+  their own app identity (the key must match the bundle id that
+  signed their build), so it is the path for owners building the app
+  themselves.
+- **Author setup is once**: deploy the relay to the developer project
+  (`supabase functions deploy push-relay --project-ref <dev ref>
+  --no-verify-jwt`) and set the three `APNS_*` secrets there, from an
+  APNs Auth Key created in the Apple Developer account
+  (Certificates → Keys). Until then, queued rows simply wait —
+  nothing fails permanently.
 
 The app-side permission strings for all of these live in the app repo's
 `Info.plist`; push and HealthKit also need their entitlements
