@@ -1,7 +1,7 @@
 -- Silo membership requests: an existing member can knock.
 --
 -- Invites flow outward (the owner mints, the friend claims —
--- 20261021000000), but a member already inside has no way to ask for
+-- 20261027000000), but a member already inside has no way to ask for
 -- more: "add me to your location silo so my copy of the app can plot
 -- you." Until now that ask traveled out-of-band or got shoehorned into a
 -- free-text edit proposal. This queue gives it a first-class shape, the

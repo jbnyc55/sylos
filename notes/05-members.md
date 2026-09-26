@@ -35,7 +35,7 @@ The proposal queues — prompts, edits, and silo membership requests
 
 The invite travels person-to-person through a channel the owner already
 trusts, and the payload itself is the proof
-(`20261021000000_member_invite_links.sql`). Supabase sends no email.
+(`20261027000000_member_invite_links.sql`). Supabase sends no email.
 
 1. On the **Manage** page, add the person as a member and put them in
    the silos you want to share (toggling what each grants). The app
@@ -65,7 +65,7 @@ claimed the old way, but the shipping flow never touches Supabase mail.
 ## Asking for more — silo membership requests
 
 Invites flow outward; an existing member can also knock
-(`20261023000000_member_silo_requests.sql`). `member_request_silo(_token,
+(`20261029000000_member_silo_requests.sql`). `member_request_silo(_token,
 silo_name, message)` queues an ask by *name* — free text, not a foreign
 key, so the queue never confirms which silos exist — and the owner rules
 on it from the app: approving means inserting the `silo_members` row
@@ -81,7 +81,7 @@ out-of-band, and the first hello is human — you mint the invite.
 
 Membership points both ways. When a friend admits *you* to their
 database, your member token to it lands in your own `peers` table
-(`20261022000000_peers.sql`): name, project URL, anon key, token. Data
+(`20261028000000_peers.sql`): name, project URL, anon key, token. Data
 stays home in each person's database; reads fan out —
 
 - **Vibe apps** running under your session read `peers` and query each
