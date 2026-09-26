@@ -14,7 +14,7 @@ password, or key checked into this repo, rotate it immediately.
 | [`03-agent-access.md`](03-agent-access.md) | The `claude` database role — read anything, write through narrow gated RPCs — and the `rq` HTTPS transport. |
 | [`04-syla-jobs.md`](04-syla-jobs.md) | Syla jobs — the app-owned schedule: pg_cron → webhook → one generic routine, instructions in editable docs. |
 | [`05-members.md`](05-members.md) | Silos, members, and the invite flow: sharing scoped by silo, enforced by the database. |
-| [`06-integrations.md`](06-integrations.md) | Integrations: the database-driven registry (new web integrations without an app update), Google Calendar's shared PKCE OAuth client and cron-synced mirror, and location sharing. |
+| [`06-integrations.md`](06-integrations.md) | Integrations: the database-driven registry (new web integrations without an app update), Google Calendar's shared PKCE OAuth client and cron-synced mirror, and the phone-native ones — location, contacts, Apple Calendar & Reminders, Health, and push notifications. |
 | [`07-user-tables.md`](07-user-tables.md) | User tables: the owner's own tables ("put this CSV into a table"), proposed by Syla, approved in the app, created by a sandboxed role — no fork, no merge. |
 | [`08-provisioning.md`](08-provisioning.md) | One-tap provisioning: the user creates only a Supabase account; the app creates the project, applies migrations from the fork, and stores Syla's key — via the Management API and a tiny OAuth relay. |
 

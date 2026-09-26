@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+#
+# push-send — queue a push notification to the owner's phone, over HTTPS.
+#
+# Calls the queue_push RPC, which appends one push_queue row (to the owner
+# unless --profile says otherwise). Delivery is the push edge function's
+# job: a trigger pokes it the moment the row lands, so the notification
+# reaches the phone within seconds. The queue row's sent_at/failed_at is
+# the delivery receipt — `scripts/rq "select * from push_queue order by
+# created_at desc limit 5"` to check.
+#
+# Usage:
+#   scripts/push-send --title "Weekly review is ready" \
+#       [--body "Three proposals are waiting."] \
+#       [--url "sylos://inbox"] [--profile <profile-uuid>]
+#
+# Environment (all required; see notes/03-agent-access.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+title='' body='' url='' profile=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --title)   title="${2:?}"; shift 2 ;;
+        --body)    body="${2:?}"; shift 2 ;;
+        --url)     url="${2:?}"; shift 2 ;;
+        --profile) profile="${2:?}"; shift 2 ;;
+        -h|--help) sed -n '2,18p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+[ -n "$title" ] || die "--title is required"
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/03-agent-access.md"
+done
+
+body_json=$(jq -n --arg title "$title" --arg body "$body" \
+                  --arg url "$url" --arg profile "$profile" '
+    {_title: $title, _body: $body}
+    + (if $url != "" then {_url: $url} else {} end)
+    + (if $profile != "" then {_profile_id: $profile} else {} end)')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/queue_push" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body_json"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi
