@@ -20,9 +20,12 @@
 // device token the caller already has. Tokens live behind each owner's
 // RLS; the relay keeps no state and logs nothing about content.
 //
-// Secrets (Edge Functions → Secrets, on the developer's project only):
-//   APNS_TEAM_ID, APNS_KEY_ID, APNS_PRIVATE_KEY (.p8 contents),
-//   APNS_TOPIC optional (default com.sylos.Sylos).
+// Credentials, on the developer's project only, from either place:
+// APNS_TEAM_ID / APNS_KEY_ID / APNS_PRIVATE_KEY (.p8 contents) /
+// APNS_TOPIC (optional, default com.sylos.Sylos) as Edge Function
+// secrets — or the same values in the project's Vault, read through the
+// service-role-only push_relay_config() RPC (setup.sql, applied once by
+// hand on the developer project). Env wins when both exist.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -42,6 +45,52 @@ function json(status: number, body: Record<string, unknown>) {
 }
 
 // ---------------------------------------------------------------------------
+// Credentials: env when set, the project's Vault otherwise
+// ---------------------------------------------------------------------------
+
+type ApnsConfig = { teamId: string; keyId: string; privateKey: string; topic: string }
+
+let cachedConfig: ApnsConfig | null = null
+
+async function apnsConfig(): Promise<ApnsConfig | null> {
+  const envTeam = Deno.env.get('APNS_TEAM_ID')
+  const envKey = Deno.env.get('APNS_KEY_ID')
+  const envPem = Deno.env.get('APNS_PRIVATE_KEY')
+  if (envTeam && envKey && envPem) {
+    return {
+      teamId: envTeam,
+      keyId: envKey,
+      privateKey: envPem,
+      topic: Deno.env.get('APNS_TOPIC') ?? 'com.sylos.Sylos',
+    }
+  }
+  if (cachedConfig) return cachedConfig
+
+  // The Vault path: push_relay_config() is service-role-only, and the
+  // service role key is auto-injected into this function's environment.
+  const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/rest/v1/rpc/push_relay_config`, {
+    method: 'POST',
+    headers: {
+      apikey: serviceKey,
+      Authorization: `Bearer ${serviceKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: '{}',
+  }).catch(() => null)
+  if (!res?.ok) return null
+  const json = (await res.json().catch(() => null)) as Record<string, string> | null
+  if (!json?.team_id || !json?.key_id || !json?.private_key) return null
+  cachedConfig = {
+    teamId: json.team_id,
+    keyId: json.key_id,
+    privateKey: json.private_key,
+    topic: json.topic || 'com.sylos.Sylos',
+  }
+  return cachedConfig
+}
+
+// ---------------------------------------------------------------------------
 // APNs provider token (ES256 JWT), cached — Apple asks for one per 20–60
 // minutes, not one per delivery.
 // ---------------------------------------------------------------------------
@@ -54,12 +103,11 @@ function base64URL(bytes: Uint8Array): string {
   return btoa(raw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '')
 }
 
-async function apnsToken(): Promise<string> {
+async function apnsToken(config: ApnsConfig): Promise<string> {
   if (cachedToken && Date.now() - cachedToken.madeAt < 40 * 60_000) return cachedToken.value
 
-  const pem = Deno.env.get('APNS_PRIVATE_KEY') ?? ''
   const der = Uint8Array.from(
-    atob(pem.replace(/-----[A-Z ]+-----/g, '').replace(/\s/g, '')),
+    atob(config.privateKey.replace(/-----[A-Z ]+-----/g, '').replace(/\s/g, '')),
     (c) => c.charCodeAt(0),
   )
   const key = await crypto.subtle.importKey(
@@ -71,11 +119,11 @@ async function apnsToken(): Promise<string> {
   )
 
   const header = base64URL(
-    new TextEncoder().encode(JSON.stringify({ alg: 'ES256', kid: Deno.env.get('APNS_KEY_ID') })),
+    new TextEncoder().encode(JSON.stringify({ alg: 'ES256', kid: config.keyId })),
   )
   const payload = base64URL(
     new TextEncoder().encode(
-      JSON.stringify({ iss: Deno.env.get('APNS_TEAM_ID'), iat: Math.floor(Date.now() / 1000) }),
+      JSON.stringify({ iss: config.teamId, iat: Math.floor(Date.now() / 1000) }),
     ),
   )
   const signature = await crypto.subtle.sign(
@@ -95,11 +143,11 @@ Deno.serve(async (req) => {
   const route = new URL(req.url).pathname.split('/').filter(Boolean).pop()
   if (route !== 'send') return json(404, { error: `Unknown route: ${route}` })
 
-  if (!Deno.env.get('APNS_TEAM_ID') || !Deno.env.get('APNS_KEY_ID') || !Deno.env.get('APNS_PRIVATE_KEY')) {
-    return json(500, { reason: 'relay not configured (APNS_* secrets missing)' })
-  }
-
   try {
+    const config = await apnsConfig()
+    if (!config) {
+      return json(500, { reason: 'relay not configured (no APNS_* secrets and no Vault config)' })
+    }
     const body = await req.json().catch(() => ({}))
     const { device_token, environment, title, body: text, url } = body as Record<string, string>
     if (!device_token || !/^[0-9a-f]+$/.test(device_token) || device_token.length > 400) {
@@ -118,9 +166,9 @@ Deno.serve(async (req) => {
     const res = await fetch(`${host}/3/device/${device_token}`, {
       method: 'POST',
       headers: {
-        authorization: `bearer ${await apnsToken()}`,
+        authorization: `bearer ${await apnsToken(config)}`,
         // Pinned: this relay only ever sends as this app.
-        'apns-topic': Deno.env.get('APNS_TOPIC') ?? 'com.sylos.Sylos',
+        'apns-topic': config.topic,
         'apns-push-type': 'alert',
         'apns-priority': '10',
       },
