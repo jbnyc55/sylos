@@ -91,7 +91,10 @@ stays home in each person's database; reads fan out —
 - **Vibe apps** running under your session read `memberships` and query each
   friend's `member_rq` directly (a location app plots the household this
   way — `skills/vibe-apps`).
-- **Syla** does the same through `scripts/membership-rq`, and reaches a
+- **Syla** does the same through `scripts/membership-rq` — via her own
+  project's `membership-relay` edge function, which looks the credentials
+  up and makes the call, so her sessions need no network allowance per
+  friend and the token never reaches them — and reaches a
   friend's Syla by queueing a prompt in their database with
   `scripts/membership-prompt` — the existing member queues are the mailboxes;
   no other transport exists.
