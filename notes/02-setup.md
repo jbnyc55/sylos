@@ -89,12 +89,18 @@ Details and the security model: [`03-agent-access.md`](03-agent-access.md).
 ## 5. Syla's schedule
 
 1. In claude.ai/code → Routines, create one fire-only Routine named
-   **Syla task** — prompt: *"Clone https://github.com/jbnyc55/sylos (the
-   public Sylos starter), read its CLAUDE.md, and do the task."* — no
-   repository needed, and add an **API trigger** to it. Copy the fire
-   URL and the `sk-ant-oat01-…` token. The routine's environment must
-   allow your project host and `github.com`, and carry `SUPABASE_URL`,
-   `SUPABASE_ANON_KEY`, `CLAUDE_RQ_KEY`.
+   **Syla task**, attach your fork of this repo as its **repository**,
+   give it the prompt *"Do the task."*, and add an **API trigger** to it.
+   Copy the fire URL and the `sk-ant-oat01-…` token. The routine's
+   environment must allow your project host and `github.com`, and carry
+   `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `CLAUDE_RQ_KEY`.
+
+   The repository is not optional. Attached, the scripts are the
+   session's own checkout and `.claude/settings.json` pre-approves
+   `scripts/*`. Cloned mid-session instead (the old "clone the starter
+   and do the task" prompt), they are code from an external source to
+   the session's permission check, which refuses to run them — the
+   run stops at `scripts/syla-claim`.
 2. From a Claude Code session in that environment (clone the starter
    first): `scripts/syla-set-webhook --url <fire url> --token <token>`
 3. The in-database dispatcher (pg_cron, every minute) now fires that one

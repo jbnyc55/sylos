@@ -62,8 +62,8 @@ these with links and copy buttons. Doing it by hand instead:
    `SUPABASE_ANON_KEY`, `CLAUDE_RQ_KEY` in your Claude Code environment.
    Verify with `scripts/rq "select current_user"` → `claude`. See
    `notes/03-agent-access.md`.
-4. **Syla's schedule**: create one fire-only Routine ("Syla task",
-   prompt: clone this repo, read its CLAUDE.md, and do the task) with an
+4. **Syla's schedule**: create one fire-only Routine ("Syla task", your
+   fork attached as its repository, prompt "Do the task.") with an
    API trigger in claude.ai/code → Routines, then store its fire URL +
    token with `scripts/syla-set-webhook`. The dispatcher inside the
    database does the rest. See `notes/04-syla-jobs.md`.
