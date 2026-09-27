@@ -4,9 +4,11 @@
 #
 # A membership is another Sylos database where this database's owner
 # holds a member token (the memberships table — skills/memberships).
-# This script looks the friend up by name through scripts/rq, then ships
-# one statement to THEIR member_rq. You see exactly what their silos
-# grant this owner; a refusal means their owner didn't share that.
+# This script names the friend and ships one statement to THEIR
+# member_rq — through your own project's membership-relay, so the call
+# needs no network allowance and the token stays home. You see exactly
+# what their silos grant this owner; a refusal means their owner didn't
+# share that.
 #
 # Usage:
 #   scripts/membership-rq alex "select lat, lng, pinged_at from location_pings order by pinged_at desc limit 1"
@@ -18,8 +20,7 @@
 # columns (`select *` is refused), valid inside a FROM subquery — the
 # server wraps it and returns a JSON array.
 #
-# Environment (all required — the same trio scripts/rq uses, for the
-# LOCAL lookup; the friend's credentials come from the memberships row):
+# Environment (all required — the same trio scripts/rq uses):
 #   SUPABASE_URL        https://<project-ref>.supabase.co
 #   SUPABASE_ANON_KEY   the anon / publishable key (client-public)
 #   CLAUDE_RQ_KEY       matches Vault secret claude_rq_key
@@ -37,36 +38,30 @@ for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
     [ -n "${!v:-}" ] || die "$v is not set — see notes/03-agent-access.md"
 done
 
-script_dir="$(cd "$(dirname "$0")" && pwd)"
 friend_name="$1"; shift
+
+# Every call goes through YOUR project's membership-relay: it looks the
+# friend's credentials up and makes the call — the token never comes here,
+# and the session needs no network allowance for the friend's host.
+relay() { # $1 = json body
+    local resp status
+    if resp=$(curl -sS --fail-with-body \
+        -X POST "${SUPABASE_URL%/}/functions/v1/membership-relay" \
+        -H "apikey: ${SUPABASE_ANON_KEY}" \
+        -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+        -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+        -H "content-type: application/json" \
+        --data "$1"); then
+        printf '%s\n' "$resp" | jq .
+    else
+        status=$?
+        printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+        exit "$status"
+    fi
+}
 
 if [ "$1" = "-" ]; then q=$(cat); else q="$*"; fi
 q="$(printf '%s' "$q" | sed -e 's/[[:space:];]*$//')"
 [ -n "$q" ] || die "empty query"
 
-# Resolve the membership locally. Never echo member_token beyond this call.
-membership_json=$("$script_dir/rq" - <<SQL
-select project_url, anon_key, member_token
-from memberships where name = '$(printf '%s' "$friend_name" | sed "s/'/''/g")'
-SQL
-)
-count=$(printf '%s' "$membership_json" | jq 'length')
-[ "$count" = "1" ] || die "no membership named '$friend_name' — scripts/rq \"select name from memberships order by name\""
-
-friend_url=$(printf '%s' "$membership_json" | jq -r '.[0].project_url')
-friend_key=$(printf '%s' "$membership_json" | jq -r '.[0].anon_key')
-friend_tok=$(printf '%s' "$membership_json" | jq -r '.[0].member_token')
-
-body=$(jq -n --arg token "$friend_tok" --arg q "$q" '{_token: $token, q: $q}')
-
-if resp=$(curl -sS --fail-with-body \
-    -X POST "${friend_url%/}/rest/v1/rpc/member_rq" \
-    -H "apikey: ${friend_key}" \
-    -H "content-type: application/json" \
-    --data "$body"); then
-    printf '%s\n' "$resp" | jq .
-else
-    status=$?
-    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
-    exit "$status"
-fi
+relay "$(jq -n --arg name "$friend_name" --arg q "$q" '{name: $name, kind: "rq", q: $q}')"

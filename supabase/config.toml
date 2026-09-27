@@ -72,6 +72,15 @@ verify_jwt = false
 [functions.push]
 verify_jwt = false
 
+# The membership relay: Syla reaches a friend's database through her own
+# project (POST /membership-relay), so her sessions need no network
+# allowance per friend and the friend's token never leaves the vault's
+# side of the wall. verify_jwt is OFF because the gate is the
+# x-claude-rq-key header, checked in SQL (membership_relay_target), the
+# same gate every agent write path has (see skills/memberships).
+[functions.membership-relay]
+verify_jwt = false
+
 # The one-tap-setup token relay — DEVELOPER infrastructure, deployed only
 # on the Sylos developer's own project (never on a user's; without its
 # secrets it answers 500). verify_jwt is OFF because it serves the app

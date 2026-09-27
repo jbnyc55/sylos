@@ -1,0 +1,101 @@
+// membership-relay — Syla's way to a friend's database, through her own.
+//
+// A membership is a friend's Sylos database where this owner holds a
+// member token (the memberships table — skills/memberships). Syla's
+// sessions run in a Claude Code environment that reaches only the hosts
+// its owner allowed, and a friend's project is never one of them; nor
+// should the owner have to allow a host for every friend. So she never
+// talks to a friend's project herself: she posts here — her own project,
+// already allowed — naming the membership and the call, and this
+// function looks the credentials up and makes the call for her.
+//
+// Auth is the same gate every agent write path has: the x-claude-rq-key
+// header, checked against the vault by membership_relay_target() (which
+// also answers the credentials, to service_role only). The token never
+// reaches the session. The target is always a stored membership's own
+// project_url — this is not an open proxy.
+//
+// POST { name, kind, q? | prompt? | proposal? }
+//   kind "rq"      → their member_rq(_token, q)            read-only SQL
+//   kind "prompt"  → their member_submit_prompt(_token, _prompt)
+//   kind "edit"    → their member_submit_edit(_token, _proposal)
+// The friend's answer comes back as it is, status included.
+
+import { createClient } from 'npm:@supabase/supabase-js@2'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-claude-rq-key',
+}
+
+function json(status: number, body: Record<string, unknown>) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
+
+const CALLS: Record<string, { rpc: string; field: string; arg: string }> = {
+  rq: { rpc: 'member_rq', field: 'q', arg: 'q' },
+  prompt: { rpc: 'member_submit_prompt', field: 'prompt', arg: '_prompt' },
+  edit: { rpc: 'member_submit_edit', field: 'proposal', arg: '_proposal' },
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  if (req.method !== 'POST') return json(405, { error: 'POST only' })
+
+  const key = req.headers.get('x-claude-rq-key') ?? ''
+  if (!key) return json(401, { error: 'x-claude-rq-key header required' })
+
+  let body: Record<string, unknown>
+  try {
+    body = await req.json()
+  } catch {
+    return json(400, { error: 'a JSON body is required' })
+  }
+  const name = typeof body.name === 'string' ? body.name.trim() : ''
+  const kind = typeof body.kind === 'string' ? body.kind : ''
+  const call = CALLS[kind]
+  if (!name) return json(400, { error: 'name (the membership) is required' })
+  if (!call) return json(400, { error: 'kind must be rq, prompt or edit' })
+  const value = body[call.field]
+  if (typeof value !== 'string' || !value.trim()) {
+    return json(400, { error: `${call.field} is required for kind ${kind}` })
+  }
+
+  const admin = createClient(
+    Deno.env.get('SUPABASE_URL')!,
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+  )
+
+  // The gate and the lookup in one: a wrong key or an unknown name both
+  // raise, and neither answer says which.
+  const { data, error } = await admin.rpc('membership_relay_target', { _key: key, _name: name })
+  if (error) return json(403, { error: error.message })
+  const target = data as { project_url: string; anon_key: string; member_token: string } | null
+  if (!target?.project_url || !target.anon_key || !target.member_token) {
+    return json(404, { error: `no membership named ${name}` })
+  }
+
+  const payload: Record<string, string> = { _token: target.member_token }
+  payload[call.arg] = kind === 'rq' ? value.replace(/[\s;]+$/, '') : value
+
+  let upstream: Response
+  try {
+    upstream = await fetch(`${target.project_url.replace(/\/$/, '')}/rest/v1/rpc/${call.rpc}`, {
+      method: 'POST',
+      headers: { apikey: target.anon_key, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+  } catch (e) {
+    return json(502, { error: `couldn't reach ${name}'s database: ${(e as Error).message}` })
+  }
+
+  // Their answer, as it is — rows, a refusal, a queued request's id.
+  const text = await upstream.text()
+  return new Response(text, {
+    status: upstream.status,
+    headers: { ...corsHeaders, 'Content-Type': upstream.headers.get('content-type') ?? 'application/json' },
+  })
+})

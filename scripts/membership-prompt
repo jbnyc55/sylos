@@ -2,19 +2,19 @@
 #
 # membership-prompt — queue a prompt at a friend's database, or read your answers.
 #
-# The syla-to-syla channel: where membership-rq runs SQL directly (for what their
-# silos grant), this queues a free-text prompt in THEIR
-# member_prompt_requests for their owner — or their Syla, if they automate
-# it — to answer in their own time. Poll with --list; pending means
-# pending, not failed.
+# The syla-to-syla channel: where membership-rq runs SQL directly (for
+# what their silos grant), this queues a free-text prompt in THEIR
+# member_prompt_requests for their owner — or their Syla, if they
+# automate it — to answer in their own time. Poll with --list; pending
+# means pending, not failed. Every call goes through your own project's
+# membership-relay.
 #
 # Usage:
 #   scripts/membership-prompt alex "can you do dinner on Friday?"
 #   scripts/membership-prompt alex -            # stdin form for longer prompts
 #   scripts/membership-prompt alex --list       # your requests there, newest first
 #
-# Environment (all required — the same trio scripts/rq uses, for the
-# LOCAL lookup; the friend's credentials come from the memberships row):
+# Environment (all required — the same trio scripts/rq uses):
 #   SUPABASE_URL        https://<project-ref>.supabase.co
 #   SUPABASE_ANON_KEY   the anon / publishable key (client-public)
 #   CLAUDE_RQ_KEY       matches Vault secret claude_rq_key
@@ -24,7 +24,7 @@ set -euo pipefail
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
 if [ $# -lt 2 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
-    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
 fi
 
@@ -32,29 +32,20 @@ for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
     [ -n "${!v:-}" ] || die "$v is not set — see notes/03-agent-access.md"
 done
 
-script_dir="$(cd "$(dirname "$0")" && pwd)"
 friend_name="$1"; shift
 
-# Resolve the membership locally. Never echo member_token beyond these calls.
-membership_json=$("$script_dir/rq" - <<SQL
-select project_url, anon_key, member_token
-from memberships where name = '$(printf '%s' "$friend_name" | sed "s/'/''/g")'
-SQL
-)
-count=$(printf '%s' "$membership_json" | jq 'length')
-[ "$count" = "1" ] || die "no membership named '$friend_name' — scripts/rq \"select name from memberships order by name\""
-
-friend_url=$(printf '%s' "$membership_json" | jq -r '.[0].project_url')
-friend_key=$(printf '%s' "$membership_json" | jq -r '.[0].anon_key')
-friend_tok=$(printf '%s' "$membership_json" | jq -r '.[0].member_token')
-
-post() { # $1 = rpc name, $2 = json body
+# Every call goes through YOUR project's membership-relay: it looks the
+# friend's credentials up and makes the call — the token never comes here,
+# and the session needs no network allowance for the friend's host.
+relay() { # $1 = json body
     local resp status
     if resp=$(curl -sS --fail-with-body \
-        -X POST "${friend_url%/}/rest/v1/rpc/$1" \
-        -H "apikey: ${friend_key}" \
+        -X POST "${SUPABASE_URL%/}/functions/v1/membership-relay" \
+        -H "apikey: ${SUPABASE_ANON_KEY}" \
+        -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+        -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
         -H "content-type: application/json" \
-        --data "$2"); then
+        --data "$1"); then
         printf '%s\n' "$resp" | jq .
     else
         status=$?
@@ -64,14 +55,12 @@ post() { # $1 = rpc name, $2 = json body
 }
 
 if [ "$1" = "--list" ]; then
-    q="select id, prompt, status, response, created_at, answered_at
-       from member_prompt_requests order by created_at desc"
-    post member_rq "$(jq -n --arg token "$friend_tok" --arg q "$q" '{_token: $token, q: $q}')"
+    q="select id, prompt, status, response, created_at, answered_at from member_prompt_requests order by created_at desc"
+    relay "$(jq -n --arg name "$friend_name" --arg q "$q" '{name: $name, kind: "rq", q: $q}')"
     exit 0
 fi
 
 if [ "$1" = "-" ]; then prompt=$(cat); else prompt="$*"; fi
 [ -n "$(printf '%s' "$prompt" | tr -d '[:space:]')" ] || die "empty prompt"
 
-post member_submit_prompt \
-    "$(jq -n --arg token "$friend_tok" --arg p "$prompt" '{_token: $token, _prompt: $p}')"
+relay "$(jq -n --arg name "$friend_name" --arg p "$prompt" '{name: $name, kind: "prompt", prompt: $p}')"
