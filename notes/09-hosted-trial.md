@@ -46,11 +46,18 @@ holds the project's connection details — Syla's key included — for as
 long as the trial lasts, which is the `claude` role on that database.
 Moving to their own Claude clears them.
 
-`20261101000000_hosted_trial.sql` (the `hosted_trial()` vault flag that
-widened `send_to_syla` to every profile on a shared project) is from an
-earlier trial design where trials shared one company database. It is
-harmless and unset everywhere; the trial no longer needs it, since the
-person is the owner of their own project.
+`20261101010000_hosted_trial.sql` (the `hosted_trial()` vault flag that
+widens `send_to_syla` to every profile on a shared project) is from an
+earlier trial design where trials shared one company database. The
+flag is unset everywhere and the trial no longer needs it, since the
+person is the owner of their own project — but the file was not
+harmless: it had re-created `send_to_syla` from an older body (the
+"For Syla" note, no child todo), undoing `20261019000000_todo_details`
+on every install that applied both. `20261103000000_send_to_syla_child_todo`
+restores the child-todo version with the gate kept. (The file also
+moved off version `20261101000000`, which it shared with
+`every_table_siloed`; it is written to re-run harmlessly on projects
+that recorded the old filename.)
 
 ## Running it (company setup)
 

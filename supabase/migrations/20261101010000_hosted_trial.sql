@@ -1,5 +1,12 @@
 -- The hosted trial: a starter install that Sylos runs for many people.
 --
+-- (This file was 20261101000000_hosted_trial.sql — the same version as
+-- every_table_siloed, which a version-keyed runner records only once.
+-- It moved to its own version, and everything in it is written so that
+-- running it a second time, on a project whose applied_migrations
+-- remembers the old filename, changes nothing: `create or replace` on
+-- both functions, idempotent grants.)
+--
 -- The app's onboarding now opens on a choice — set up your own Sylos, or
 -- try hosted Syla. The hosted side is nothing new in the schema: it is
 -- an ordinary install of this starter that the Sylos company owns, with
@@ -18,7 +25,7 @@
 -- The event Syla claims says who sent the message, so the company's
 -- Syla answers the right person.
 
-create function public.hosted_trial()
+create or replace function public.hosted_trial()
 returns boolean
 language sql
 stable
