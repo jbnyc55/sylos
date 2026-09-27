@@ -62,6 +62,23 @@ the GitHub integration exactly as before — the runner skips nothing it
 didn't apply itself, and `applied_migrations` only tracks app-applied
 files.
 
+## The web app runs the same flow
+
+getsylos.com/app (the browser client, in sylos-company `web/`) is a
+second client of the same OAuth app and relay. It differs only in how
+the browser gets back: it marks its flow in the OAuth `state`
+(`web:<nonce>`; `local:<nonce>` from a Vite dev server) and the relay's
+`GET /callback` sends that browser to `https://getsylos.com/app/oauth`
+(`WEB_CALLBACK_URL` overrides it; `http://localhost:5173/app/oauth` for
+`local:`) — a fixed allow-list in the relay, never a URL taken from the
+request. The relay also answers CORS preflights on its POST routes for
+the same reason. The Management API calls themselves are made straight
+from the browser, as on the phone; the tokens live in that browser's
+storage. The migration source is read through GitHub's git-trees API
+(one call for the whole tree) plus raw.githubusercontent.com. Both
+`applied_migrations` and `deployed_functions` are the same ledgers, so a
+project set up from the phone keeps in step from the web and back.
+
 ## The relay, and why it exists
 
 OAuth token exchange requires the app's **client secret**, which cannot
