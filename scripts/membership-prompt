@@ -9,6 +9,8 @@
 # means pending, not failed. Every call goes through your own project's
 # membership-relay.
 #
+# Find the name with scripts/membership-list (case doesn't matter).
+#
 # Usage:
 #   scripts/membership-prompt alex "can you do dinner on Friday?"
 #   scripts/membership-prompt alex -            # stdin form for longer prompts
@@ -24,7 +26,7 @@ set -euo pipefail
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
 if [ $# -lt 2 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
-    sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
 fi
 
