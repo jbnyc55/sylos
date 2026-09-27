@@ -19,14 +19,38 @@
 // project exists. The relay grants nothing by itself — an authorization
 // code is single-use, PKCE-bound to the app that started the flow, and
 // tokens go only to that caller.
+//
+// Two clients share it: the iOS app, whose callback is the sylos://
+// scheme, and the web app at getsylos.com/app, which runs the same flow
+// in the browser. The web app marks its flow in the OAuth `state`
+// (`web:<nonce>`, or `local:<nonce>` from a dev server), and GET
+// /callback sends that browser back to the web app's own return address
+// — a fixed allow-list below, never a URL taken from the request, so the
+// callback can't be turned into an open redirect. The POST routes answer
+// CORS preflights for the same reason: a browser has to be able to call
+// them, and possession of the relay URL still grants nothing without a
+// fresh, PKCE-bound code.
 
 const TOKEN_URL = "https://api.supabase.com/v1/oauth/token";
 const APP_SCHEME = "sylos://supabase-oauth";
+// Where a web flow lands after consent, by state prefix. WEB_CALLBACK_URL
+// overrides the production address (a preview deployment, say).
+const WEB_RETURNS: Record<string, string> = {
+  web: Deno.env.get("WEB_CALLBACK_URL") ?? "https://getsylos.com/app/oauth",
+  local: "http://localhost:5173/app/oauth",
+};
+
+const CORS_HEADERS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "POST, OPTIONS",
+  "access-control-allow-headers": "content-type",
+  "access-control-max-age": "86400",
+};
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...CORS_HEADERS },
   });
 }
 
@@ -69,10 +93,17 @@ Deno.serve(async (req) => {
       const value = params.get(key);
       if (value) forward.set(key, value);
     }
+    // A web flow says so in its state; everything else is the iOS app.
+    const prefix = (params.get("state") ?? "").split(":")[0];
+    const webReturn = WEB_RETURNS[prefix];
     return new Response(null, {
       status: 302,
-      headers: { location: `${APP_SCHEME}?${forward}` },
+      headers: { location: `${webReturn ?? APP_SCHEME}?${forward}` },
     });
+  }
+
+  if (req.method === "OPTIONS") {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
   if (req.method !== "POST") return json(405, { error: "POST only" });
