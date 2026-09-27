@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+#
+# membership-rq — read-only SQL against a friend's database, as this owner.
+#
+# A membership is another Sylos database where this database's owner
+# holds a member token (the memberships table — skills/memberships).
+# This script looks the friend up by name through scripts/rq, then ships
+# one statement to THEIR member_rq. You see exactly what their silos
+# grant this owner; a refusal means their owner didn't share that.
+#
+# Usage:
+#   scripts/membership-rq alex "select lat, lng, pinged_at from location_pings order by pinged_at desc limit 1"
+#   scripts/membership-rq alex - <<'SQL'      # stdin form; avoids shell-quoting pain
+#   select id, body, created_at from manual_notes order by created_at desc limit 5
+#   SQL
+#
+# Contract at their end: one statement, no trailing semicolon, name your
+# columns (`select *` is refused), valid inside a FROM subquery — the
+# server wraps it and returns a JSON array.
+#
+# Environment (all required — the same trio scripts/rq uses, for the
+# LOCAL lookup; the friend's credentials come from the memberships row):
+#   SUPABASE_URL        https://<project-ref>.supabase.co
+#   SUPABASE_ANON_KEY   the anon / publishable key (client-public)
+#   CLAUDE_RQ_KEY       matches Vault secret claude_rq_key
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+if [ $# -lt 2 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+fi
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/03-agent-access.md"
+done
+
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+friend_name="$1"; shift
+
+if [ "$1" = "-" ]; then q=$(cat); else q="$*"; fi
+q="$(printf '%s' "$q" | sed -e 's/[[:space:];]*$//')"
+[ -n "$q" ] || die "empty query"
+
+# Resolve the membership locally. Never echo member_token beyond this call.
+membership_json=$("$script_dir/rq" - <<SQL
+select project_url, anon_key, member_token
+from memberships where name = '$(printf '%s' "$friend_name" | sed "s/'/''/g")'
+SQL
+)
+count=$(printf '%s' "$membership_json" | jq 'length')
+[ "$count" = "1" ] || die "no membership named '$friend_name' — scripts/rq \"select name from memberships order by name\""
+
+friend_url=$(printf '%s' "$membership_json" | jq -r '.[0].project_url')
+friend_key=$(printf '%s' "$membership_json" | jq -r '.[0].anon_key')
+friend_tok=$(printf '%s' "$membership_json" | jq -r '.[0].member_token')
+
+body=$(jq -n --arg token "$friend_tok" --arg q "$q" '{_token: $token, q: $q}')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${friend_url%/}/rest/v1/rpc/member_rq" \
+    -H "apikey: ${friend_key}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi
