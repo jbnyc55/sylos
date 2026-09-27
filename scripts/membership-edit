@@ -9,6 +9,8 @@
 # there has "propose edits" on; a refusal means it doesn't. Every call
 # goes through your own project's membership-relay.
 #
+# Find the name with scripts/membership-list (case doesn't matter).
+#
 # Usage:
 #   scripts/membership-edit alex "the dentist on Sep 27 is at 3pm, not 2pm"
 #   scripts/membership-edit alex -           # stdin form for longer proposals
@@ -24,7 +26,7 @@ set -euo pipefail
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
 if [ $# -lt 2 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
-    sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,23p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
 fi
 

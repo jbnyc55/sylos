@@ -10,6 +10,8 @@
 # what their silos grant this owner; a refusal means their owner didn't
 # share that.
 #
+# Find the name with scripts/membership-list (case doesn't matter).
+#
 # Usage:
 #   scripts/membership-rq alex "select lat, lng, pinged_at from location_pings order by pinged_at desc limit 1"
 #   scripts/membership-rq alex - <<'SQL'      # stdin form; avoids shell-quoting pain
@@ -30,7 +32,7 @@ set -euo pipefail
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
 if [ $# -lt 2 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
-    sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,28p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
 fi
 
