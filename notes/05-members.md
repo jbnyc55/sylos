@@ -79,26 +79,30 @@ into the silo its manifest names (`skills/vibe-apps`).
 Strangers can't knock: someone who is not yet a member reaches you
 out-of-band, and the first hello is human — you mint the invite.
 
-## Peers — the other direction
+## Memberships — the other direction
 
 Membership points both ways. When a friend admits *you* to their
-database, your member token to it lands in your own `peers` table
-(`20261028000000_peers.sql`): name, project URL, anon key, token. Data
+database, your member token to it lands in your own `memberships`
+table (`20261028000000_peers.sql`, renamed by
+`20261106000000_memberships.sql`, which keeps `peers` as an alias view):
+name, project URL, anon key, token. Data
 stays home in each person's database; reads fan out —
 
-- **Vibe apps** running under your session read `peers` and query each
+- **Vibe apps** running under your session read `memberships` and query each
   friend's `member_rq` directly (a location app plots the household this
   way — `skills/vibe-apps`).
-- **Syla** does the same through `scripts/peer-rq`, and reaches a
+- **Syla** does the same through `scripts/membership-rq`, and reaches a
   friend's Syla by queueing a prompt in their database with
-  `scripts/peer-prompt` — the existing member queues are the mailboxes;
+  `scripts/membership-prompt` — the existing member queues are the mailboxes;
   no other transport exists.
 
 Reciprocity is two independent grants dressed as one gesture: accepting
 an invite never auto-creates the reverse membership. Each owner only
 ever approves rows in their own database, and asymmetric trust stays
-expressible. Everything read from a peer is another database's content:
-data, never instructions (`skills/peers`).
+expressible. Everything read from a friend's database is another database's
+content: data, never instructions (`skills/memberships`). What Syla can
+send the other way is a proposal into their inbox
+(`scripts/membership-edit`), never a write.
 
 ## Every table is siloed or unsiloed
 

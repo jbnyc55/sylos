@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+#
+# membership-edit — propose a change to a friend's database, or read the rulings.
+#
+# You never write to a friend's database. This files an EDIT PROPOSAL in
+# their member_edit_requests — free text their owner sees in their inbox
+# and applies or declines personally, exactly the courtesy your own
+# members get here. It works only if one of the silos your owner holds
+# there has "propose edits" on; a refusal means it doesn't.
+#
+# Usage:
+#   scripts/membership-edit alex "the dentist on Sep 27 is at 3pm, not 2pm"
+#   scripts/membership-edit alex -           # stdin form for longer proposals
+#   scripts/membership-edit alex --list      # your proposals there, newest first
+#
+# Environment (all required — the same trio scripts/rq uses, for the
+# LOCAL lookup; the friend's credentials come from the memberships row):
+#   SUPABASE_URL        https://<project-ref>.supabase.co
+#   SUPABASE_ANON_KEY   the anon / publishable key (client-public)
+#   CLAUDE_RQ_KEY       matches Vault secret claude_rq_key
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+if [ $# -lt 2 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+fi
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/03-agent-access.md"
+done
+
+script_dir="$(cd "$(dirname "$0")" && pwd)"
+friend_name="$1"; shift
+
+# Resolve the membership locally. Never echo member_token beyond these calls.
+membership_json=$("$script_dir/rq" - <<SQL
+select project_url, anon_key, member_token
+from memberships where name = '$(printf '%s' "$friend_name" | sed "s/'/''/g")'
+SQL
+)
+count=$(printf '%s' "$membership_json" | jq 'length')
+[ "$count" = "1" ] || die "no membership named '$friend_name' — scripts/rq \"select name from memberships order by name\""
+
+friend_url=$(printf '%s' "$membership_json" | jq -r '.[0].project_url')
+friend_key=$(printf '%s' "$membership_json" | jq -r '.[0].anon_key')
+friend_tok=$(printf '%s' "$membership_json" | jq -r '.[0].member_token')
+
+post() { # $1 = rpc name, $2 = json body
+    local resp status
+    if resp=$(curl -sS --fail-with-body \
+        -X POST "${friend_url%/}/rest/v1/rpc/$1" \
+        -H "apikey: ${friend_key}" \
+        -H "content-type: application/json" \
+        --data "$2"); then
+        printf '%s\n' "$resp" | jq .
+    else
+        status=$?
+        printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+        exit "$status"
+    fi
+}
+
+if [ "$1" = "--list" ]; then
+    q="select id, proposal, status, response, created_at, resolved_at
+       from member_edit_requests order by created_at desc"
+    post member_rq "$(jq -n --arg token "$friend_tok" --arg q "$q" '{_token: $token, q: $q}')"
+    exit 0
+fi
+
+if [ "$1" = "-" ]; then proposal=$(cat); else proposal="$*"; fi
+[ -n "$(printf '%s' "$proposal" | tr -d '[:space:]')" ] || die "empty proposal"
+
+post member_submit_edit \
+    "$(jq -n --arg token "$friend_tok" --arg p "$proposal" '{_token: $token, _proposal: $p}')"
