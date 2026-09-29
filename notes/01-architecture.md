@@ -15,31 +15,43 @@ sylos-starter/
 └── package.json          db helper scripts (supabase CLI wrappers)
 ```
 
-The iOS app (native SwiftUI: onboarding, the PostgREST data layer, the
-five tabs) lives in its own **private** repository, `sylos_ios` — this
-starter is public, the client is not. Everything here still describes
-the whole system; the app is bound by the same rules.
+The clients live elsewhere. Most UX is the **web shell** at
+getsylos.com/app — login, provisioning, the app switcher, the iframe
+host — and the apps it opens, which are **vibe code apps hosted in this
+database**: whole client-side apps stored one row each in
+`vibe_code_apps` and served over PostgREST like any other row. One of
+them is the one the shell boots straight into (`profiles.default_app`);
+two stock apps ship with every install — **Mash**, the chat app and the
+default, and **Todos**, the classic tabs, quietly second in the
+switcher — and chat is the one deliberately centralized piece, living
+on the company's project rather than yours. `notes/10-apps-and-chat.md`
+is the whole story. The iOS app — now a thin wrapper around the shell
+plus what the web cannot do (push, Health/Location/Contacts, Keychain)
+— lives in its own **private** repository, `sylos_ios`. Everything here
+still describes the whole system; every client is bound by the same
+rules.
 
-There is deliberately no `.github/workflows/` and no web hosting. Merging
+There is deliberately no `.github/workflows/` in this repo. Merging
 to `main` migrates production either way, by one of two runners: on
-one-tap installs the app itself applies `supabase/migrations/` and
+one-tap installs the client itself applies `supabase/migrations/` and
 deploys `supabase/functions/` from the fork over the Management API (on
 provisioning and on every launch — `notes/08-provisioning.md`); on manual
 installs Supabase's GitHub integration watches the repo and applies
 migrations on merge (edge functions are deployed with
 `supabase functions deploy <slug>` there, or by any launch of a
 one-tap-connected app).
-The client is the iOS app: built in Xcode, distributed through
-TestFlight/App Store, deployed nowhere. A change to `notes/` costs zero
-deploys.
+This repo itself still hosts nothing: the shell is the company's site
+to run, and the apps you actually use are rows in your own database,
+deployed by writing the row. A change to `notes/` costs zero deploys.
 
 ## Runtime data flow
 
 ```
-   Sylos iOS app (SwiftUI)
-      │  URLSession → PostgREST, authorized by the publishable key
+   The web shell (getsylos.com/app), the vibe apps it runs in iframes,
+   and the iOS shell wrapped around it
+      │  fetch → PostgREST, authorized by the publishable key
       │  + the user's session token (GoTrue password/signup grant,
-      │    refreshed automatically)
+      │    refreshed automatically; handed into each app by postMessage)
       ▼
    Supabase  (PostgREST → Postgres)
       │
@@ -47,8 +59,8 @@ deploys.
           defined in supabase/migrations/
 ```
 
-There is **no backend of our own**. The app talks to Supabase directly
-using the public (publishable/anon) key the user typed into onboarding.
+There is **no backend of our own**. The client talks to Supabase
+directly using the public (publishable/anon) key from onboarding.
 That is a deliberate trade, and it has one hard consequence:
 
 > **Row level security is the entire authorization layer.** A table
@@ -111,10 +123,16 @@ because members and guests can hold auth sessions too.
 
 ## Why these choices
 
-**A native client over a hosted site** — one less account (no Vercel),
-one less deploy pipeline, and no public URL to protect; the app works
-against whichever Supabase project its owner configured, and there is no
-server runtime, so there is no place for a privileged key to live.
+**A credential-free shell over a backend** — this section used to argue
+for a native client and no web hosting at all. That doctrine is
+overturned: most UX is now the web shell at getsylos.com/app plus vibe
+apps hosted in your own database. But the argument's core survives in
+the new shape, and it is worth restating honestly: the shell is static
+pages that ship no credentials, working against whichever Supabase
+project its owner configured, and there is still no server runtime of
+ours — so there is still no place for a privileged key to live. What
+the site's operator hosts is HTML; what authorizes anything is your
+own database's RLS.
 **No CI runners** — Supabase already watches GitHub; dropping runners
 removes the whole secret surface. The trade is that pre-merge checks are
 on you: the app builds clean in Xcode, `npm run db:lint` for the
