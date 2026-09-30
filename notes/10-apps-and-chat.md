@@ -65,28 +65,40 @@ The tables keep their names (`members`, `memberships`, `silo_members`)
 — this is wording, not schema — but product copy says "Following",
 "Followers", "silos you follow".
 
-## Chat: relayed through the company project, never owned by it
+## Chat: personal, all the way down
 
-Chat is the one place transport is centralized, and the line is drawn
-precisely. A conversation between two people who each own a database
-has no natural host: hosted on either follower's free-tier project it
-dies when that project pauses, a chat list would mean polling N
-projects with N credentials, and a brand-new person with no project
-yet still needs to be reachable. So messages pass through the shared
-company project (getsylos.com's), where RLS is per-member instead of
-per-owner.
+Chat was the one centralized record, and it no longer is. A
+conversation has no host anywhere (`20261116000000_personal_chat.sql`):
 
-But under "every source of truth is local" the company project is
-**transport, not truth** — a mailbox. The chat *app* is an ordinary
-vibe in your own project that connects out to the company database on
-the fly with its own account there, exactly the way any app reads any
-other database; the shell posts it nothing special. And the durable
-copy of every chat is meant to be each member's own database: the
-**chat archive job** (a Syla job routing chats into your silos via
-`chat_settings`) is what makes the doctrine hold — company rows are
-ephemeral and prunable; losing the company database would cost
-delivery, never history. Until the archive job ships, that is the
-honest gap in the rule.
+- **Your words live in your own database.** `chat_messages` rows in
+  your project are the messages you sent — nothing else. Deleting your
+  side is real deletion.
+- **A DM is a mutual follow.** Each side holds a `chats` row carrying
+  the same `chat_key` and names the other on it (`chat_members` →
+  your `members` rows). Naming a member IS the read grant: chats are
+  secret by audience and never siloed — a silo placement can widen a
+  record to a whole shelf of followers, which is exactly what a DM
+  must never do. Silos only ever govern what you deliberately archive
+  out of a chat into your records, and that copy defaults to private.
+- **Reading a chat is a merge.** Your client interleaves your rows
+  with each peer's, read from their database over your follower key
+  (`member_rq`, or their realtime channel while the app is open).
+  Nobody ever writes into anyone else's database.
+- **A group is a roster, locally copied.** Whoever assembles it mints
+  the `chat_key` and names the members; each member's client mirrors
+  the row into their own project and names the others back. Every
+  member holds their own copy of who is in the chat.
+- **The company project keeps no chat index, no bodies, no social
+  graph.** Its one chat duty is a stateless push hop: "wake this
+  device", stored nowhere (the developer's `push-relay`). Who you
+  talk to is written only in the databases of the people talking.
+
+The costs are chosen, not accidental: there are no DMs before your
+project exists and an invite has changed hands (the invite link is
+how every conversation begins), there is no contact discovery, and a
+paused peer is a silent peer until their project wakes. What is
+bought is the doctrine, whole: every source of truth is local,
+including the social graph.
 
 ## Syla is a conversation
 
@@ -125,23 +137,26 @@ single-use code, and the recipient claims it in one tap
 transport; the machinery is this starter's, unchanged
 (`notes/05-members.md`).
 
-## Your silo, your Syla
+## Your chat, your Syla
 
-`chat_settings` is each member's own take on a chat: which of *their*
-silos it files into, and whether *their* Syla works it — sweeps it for
-things to act on, answers asks, so a DM about Friday dinner can end up
-as an event on your calendar, created through your own project's gated
-write paths and answered in the chat attributed as your Syla. The flag
-is strictly per-person — my Syla watching a chat says nothing about
-yours. And the consent, stated plainly: **enabling Syla on a shared
-chat means your agent processes what the other members write there.**
-That is the same reality as any member copying a chat out by hand, and
-the flag is surfaced to the other members rather than hidden.
+Whether your Syla works a chat is your own flag on your own `chats`
+row — sweeps it for things to act on, so a DM about Friday dinner can
+end up as an event on your calendar, created through your project's
+gated write paths. Reading the other sides means using your member
+keys, so the consent is stated plainly: **enabling Syla on a chat
+means your agent processes what the other members wrote in their
+databases** — the same reality as any member copying a chat out by
+hand. My Syla watching a chat says nothing about yours.
 
 ## Deliberately not built yet
 
-- **The chat archive job** — the piece that makes "company project as
-  transport, not truth" literally true (above).
+- **The Chat client on the merge model.** The schema above is live;
+  the chat app still speaks the retired centralized model (the
+  company project's `mash_chat` tables) until it is rewritten to
+  write home and merge peers. Those company tables are legacy the day
+  the client switches, and prunable.
+- **The stateless push hop** — the trigger that asks the developer's
+  relay to wake a peer's device, storing nothing.
 - **Stock apps as deployed vibes.** The split apps render in the shell
   until each is built into a single file and deployed; the home screen
   doesn't change when they do.
