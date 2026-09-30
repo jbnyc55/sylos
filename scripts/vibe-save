@@ -10,8 +10,13 @@
 #
 # Usage:
 #   scripts/vibe-save --slug <slug> --name <name> --html-file <file> \
-#       [--hint <hint>] [--src-dir <dir>] [--open-to-signed-in | --owner-only]
+#       [--hint <hint>] [--icon <emoji-or-svg> | --icon-file <file>] \
+#       [--src-dir <dir>] [--open-to-signed-in | --owner-only]
 #   scripts/vibe-save --slug <slug> --name <name> --html-file -        # stdin
+#
+# --icon sets the app's home-screen icon: an emoji, or one inline <svg>
+# element (--icon-file for svg saved to disk). Omitting both keeps the
+# stored icon; --icon '' clears it.
 #
 # The html must be the vibes/ build's output: a complete self-contained
 # document (leading <!doctype html>, everything inlined) — the database
@@ -35,13 +40,15 @@ set -euo pipefail
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
-slug='' name='' hint='' html_file='' src_dir='' open=''
+slug='' name='' hint='' html_file='' src_dir='' open='' icon='' icon_set='' icon_file=''
 while [ $# -gt 0 ]; do
     case "$1" in
         --slug)      slug="${2:?}"; shift 2 ;;
         --name)      name="${2:?}"; shift 2 ;;
         --hint)      hint="${2:?}"; shift 2 ;;
         --html-file) html_file="${2:?}"; shift 2 ;;
+        --icon)      icon="${2?}"; icon_set=true; shift 2 ;;
+        --icon-file) icon_file="${2:?}"; icon_set=true; shift 2 ;;
         --src-dir)   src_dir="${2:?}"; shift 2 ;;
         --open-to-signed-in) open=true; shift ;;
         --owner-only)        open=false; shift ;;
@@ -68,9 +75,25 @@ else
     cat "$html_file" > "$tmpdir/app.html"
 fi
 
-jq -n --arg slug "$slug" --arg name "$name" --arg hint "$hint" \
-    --rawfile html "$tmpdir/app.html" \
-    '{_slug: $slug, _name: $name, _hint: $hint, _html: $html}' > "$tmpdir/body.json"
+# The icon rides along only when asked for — an absent _icon keeps the
+# stored one (the RPC's null default), so redeploys never strip icons.
+if [ -n "$icon_file" ]; then
+    [ -r "$icon_file" ] || die "cannot read $icon_file"
+    cat "$icon_file" > "$tmpdir/icon"
+else
+    printf '%s' "$icon" > "$tmpdir/icon"
+fi
+
+if [ -n "$icon_set" ]; then
+    jq -n --arg slug "$slug" --arg name "$name" --arg hint "$hint" \
+        --rawfile html "$tmpdir/app.html" --rawfile icon "$tmpdir/icon" \
+        '{_slug: $slug, _name: $name, _hint: $hint, _html: $html, _icon: $icon}' \
+        > "$tmpdir/body.json"
+else
+    jq -n --arg slug "$slug" --arg name "$name" --arg hint "$hint" \
+        --rawfile html "$tmpdir/app.html" \
+        '{_slug: $slug, _name: $name, _hint: $hint, _html: $html}' > "$tmpdir/body.json"
+fi
 
 rpc() {
     # rpc <name> <body-file> — POST one RPC, pretty-print the response.
