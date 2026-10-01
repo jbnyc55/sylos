@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 #
-# membership-edit — propose a change to a friend's database, or read the rulings.
+# following-edit — propose a change to a friend's database, or read the rulings.
 #
 # You never write to a friend's database. This files an EDIT PROPOSAL in
-# their member_edit_requests — free text their owner sees in their inbox
+# their follower_edit_requests — free text their owner sees in their inbox
 # and applies or declines personally, exactly the courtesy your own
-# members get here. It works only if one of the silos your owner holds
+# followers get here. It works only if one of the silos your owner holds
 # there has "propose edits" on; a refusal means it doesn't. Every call
-# goes through your own project's membership-relay.
+# goes through your own project's following-relay.
 #
-# Find the name with scripts/membership-list (case doesn't matter).
+# Find the name with scripts/following-list (case doesn't matter).
 #
 # Usage:
-#   scripts/membership-edit alex "the dentist on Sep 27 is at 3pm, not 2pm"
-#   scripts/membership-edit alex -           # stdin form for longer proposals
-#   scripts/membership-edit alex --list      # your proposals there, newest first
+#   scripts/following-edit alex "the dentist on Sep 27 is at 3pm, not 2pm"
+#   scripts/following-edit alex -           # stdin form for longer proposals
+#   scripts/following-edit alex --list      # your proposals there, newest first
 #
 # Environment (all required — the same trio scripts/rq uses):
 #   SUPABASE_URL        https://<project-ref>.supabase.co
@@ -36,13 +36,13 @@ done
 
 friend_name="$1"; shift
 
-# Every call goes through YOUR project's membership-relay: it looks the
+# Every call goes through YOUR project's following-relay: it looks the
 # friend's credentials up and makes the call — the token never comes here,
 # and the session needs no network allowance for the friend's host.
 relay() { # $1 = json body
     local resp status
     if resp=$(curl -sS --fail-with-body \
-        -X POST "${SUPABASE_URL%/}/functions/v1/membership-relay" \
+        -X POST "${SUPABASE_URL%/}/functions/v1/following-relay" \
         -H "apikey: ${SUPABASE_ANON_KEY}" \
         -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
         -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
@@ -57,7 +57,7 @@ relay() { # $1 = json body
 }
 
 if [ "$1" = "--list" ]; then
-    q="select id, proposal, status, response, created_at, resolved_at from member_edit_requests order by created_at desc"
+    q="select id, proposal, status, response, created_at, resolved_at from follower_edit_requests order by created_at desc"
     relay "$(jq -n --arg name "$friend_name" --arg q "$q" '{name: $name, kind: "rq", q: $q}')"
     exit 0
 fi

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 #
-# membership-list — the names of your owner's memberships, and nothing else.
+# following-list — the names of your owner's following, and nothing else.
 #
-# A membership is a friend's Sylos database your owner holds a key to
-# (skills/memberships). This is how you find the friend a message names:
+# A follow is a friend's Sylos database your owner holds a key to
+# (skills/following). This is how you find the friend a message names:
 # it answers the names alone — no address, no key — and the other
-# membership scripts take any of them (case doesn't matter).
+# follow scripts take any of them (case doesn't matter).
 #
 # Usage:
-#   scripts/membership-list
+#   scripts/following-list
 #
 # Environment (all required — the same trio scripts/rq uses):
 #   SUPABASE_URL        https://<project-ref>.supabase.co
@@ -29,7 +29,7 @@ for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
 done
 
 if resp=$(curl -sS --fail-with-body \
-    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/membership_names" \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/following_names" \
     -H "apikey: ${SUPABASE_ANON_KEY}" \
     -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
     -H "content-type: application/json" \

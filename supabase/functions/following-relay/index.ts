@@ -1,24 +1,24 @@
-// membership-relay — Syla's way to a friend's database, through her own.
+// following-relay — Syla's way to a friend's database, through her own.
 //
-// A membership is a friend's Sylos database where this owner holds a
-// member token (the memberships table — skills/memberships). Syla's
+// A follow is a friend's Sylos database where this owner holds a
+// follower token (the following table — skills/following). Syla's
 // sessions run in a Claude Code environment that reaches only the hosts
 // its owner allowed, and a friend's project is never one of them; nor
 // should the owner have to allow a host for every friend. So she never
 // talks to a friend's project herself: she posts here — her own project,
-// already allowed — naming the membership and the call, and this
+// already allowed — naming the follow and the call, and this
 // function looks the credentials up and makes the call for her.
 //
 // Auth is the same gate every agent write path has: the x-claude-rq-key
-// header, checked against the vault by membership_relay_target() (which
+// header, checked against the vault by following_relay_target() (which
 // also answers the credentials, to service_role only). The token never
-// reaches the session. The target is always a stored membership's own
+// reaches the session. The target is always a stored follow's own
 // project_url — this is not an open proxy.
 //
 // POST { name, kind, q? | prompt? | proposal? }
-//   kind "rq"      → their member_rq(_token, q)            read-only SQL
-//   kind "prompt"  → their member_submit_prompt(_token, _prompt)
-//   kind "edit"    → their member_submit_edit(_token, _proposal)
+//   kind "rq"      → their follower_rq(_token, q)            read-only SQL
+//   kind "prompt"  → their follower_submit_prompt(_token, _prompt)
+//   kind "edit"    → their follower_submit_edit(_token, _proposal)
 // The friend's answer comes back as it is, status included.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
@@ -36,9 +36,9 @@ function json(status: number, body: Record<string, unknown>) {
 }
 
 const CALLS: Record<string, { rpc: string; field: string; arg: string }> = {
-  rq: { rpc: 'member_rq', field: 'q', arg: 'q' },
-  prompt: { rpc: 'member_submit_prompt', field: 'prompt', arg: '_prompt' },
-  edit: { rpc: 'member_submit_edit', field: 'proposal', arg: '_proposal' },
+  rq: { rpc: 'follower_rq', field: 'q', arg: 'q' },
+  prompt: { rpc: 'follower_submit_prompt', field: 'prompt', arg: '_prompt' },
+  edit: { rpc: 'follower_submit_edit', field: 'proposal', arg: '_proposal' },
 }
 
 Deno.serve(async (req) => {
@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
   const name = typeof body.name === 'string' ? body.name.trim() : ''
   const kind = typeof body.kind === 'string' ? body.kind : ''
   const call = CALLS[kind]
-  if (!name) return json(400, { error: 'name (the membership) is required' })
+  if (!name) return json(400, { error: 'name (the follow) is required' })
   if (!call) return json(400, { error: 'kind must be rq, prompt or edit' })
   const value = body[call.field]
   if (typeof value !== 'string' || !value.trim()) {
@@ -71,14 +71,14 @@ Deno.serve(async (req) => {
 
   // The gate and the lookup in one: a wrong key or an unknown name both
   // raise, and neither answer says which.
-  const { data, error } = await admin.rpc('membership_relay_target', { _key: key, _name: name })
+  const { data, error } = await admin.rpc('following_relay_target', { _key: key, _name: name })
   if (error) return json(403, { error: error.message })
-  const target = data as { project_url: string; anon_key: string; member_token: string } | null
-  if (!target?.project_url || !target.anon_key || !target.member_token) {
-    return json(404, { error: `no membership named ${name}` })
+  const target = data as { project_url: string; anon_key: string; follower_token: string } | null
+  if (!target?.project_url || !target.anon_key || !target.follower_token) {
+    return json(404, { error: `no follow named ${name}` })
   }
 
-  const payload: Record<string, string> = { _token: target.member_token }
+  const payload: Record<string, string> = { _token: target.follower_token }
   payload[call.arg] = kind === 'rq' ? value.replace(/[\s;]+$/, '') : value
 
   let upstream: Response

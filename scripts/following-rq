@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 #
-# membership-rq — read-only SQL against a friend's database, as this owner.
+# following-rq — read-only SQL against a friend's database, as this owner.
 #
-# A membership is another Sylos database where this database's owner
-# holds a member token (the memberships table — skills/memberships).
+# A follow is another Sylos database where this database's owner
+# holds a follower token (the following table — skills/following).
 # This script names the friend and ships one statement to THEIR
-# member_rq — through your own project's membership-relay, so the call
+# follower_rq — through your own project's following-relay, so the call
 # needs no network allowance and the token stays home. You see exactly
 # what their silos grant this owner; a refusal means their owner didn't
 # share that.
 #
-# Find the name with scripts/membership-list (case doesn't matter).
+# Find the name with scripts/following-list (case doesn't matter).
 #
 # Usage:
-#   scripts/membership-rq alex "select lat, lng, pinged_at from location_pings order by pinged_at desc limit 1"
-#   scripts/membership-rq alex - <<'SQL'      # stdin form; avoids shell-quoting pain
+#   scripts/following-rq alex "select lat, lng, pinged_at from location_pings order by pinged_at desc limit 1"
+#   scripts/following-rq alex - <<'SQL'      # stdin form; avoids shell-quoting pain
 #   select id, body, created_at from manual_notes order by created_at desc limit 5
 #   SQL
 #
@@ -42,13 +42,13 @@ done
 
 friend_name="$1"; shift
 
-# Every call goes through YOUR project's membership-relay: it looks the
+# Every call goes through YOUR project's following-relay: it looks the
 # friend's credentials up and makes the call — the token never comes here,
 # and the session needs no network allowance for the friend's host.
 relay() { # $1 = json body
     local resp status
     if resp=$(curl -sS --fail-with-body \
-        -X POST "${SUPABASE_URL%/}/functions/v1/membership-relay" \
+        -X POST "${SUPABASE_URL%/}/functions/v1/following-relay" \
         -H "apikey: ${SUPABASE_ANON_KEY}" \
         -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
         -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \

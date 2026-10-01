@@ -13,12 +13,12 @@ password, or key checked into this repo, rotate it immediately.
 | [`02-setup.md`](02-setup.md) | First-time setup, step by step — the same flow the iOS onboarding walks through: GitHub, the owner account, Supabase, agent access, Syla's schedule. |
 | [`03-agent-access.md`](03-agent-access.md) | The `claude` database role — read anything, write through narrow gated RPCs — and the `rq` HTTPS transport. |
 | [`04-syla-jobs.md`](04-syla-jobs.md) | Syla jobs — the app-owned schedule: pg_cron → webhook → one generic routine, instructions in editable docs. |
-| [`05-members.md`](05-members.md) | Silos, members, and the invite flow: sharing scoped by silo, enforced by the database. |
+| [`05-followers.md`](05-followers.md) | Silos, followers, and the invite flow: sharing scoped by silo, enforced by the database. |
 | [`06-integrations.md`](06-integrations.md) | Integrations: the database-driven registry (new web integrations without an app update), Google Calendar's shared PKCE OAuth client and cron-synced mirror, and the phone-native ones — location, contacts, Apple Calendar & Reminders, Health, and push notifications. |
 | [`07-user-tables.md`](07-user-tables.md) | User tables: the owner's own tables ("put this CSV into a table"), proposed by Syla, approved in the app, created by a sandboxed role — no fork, no merge. |
 | [`08-provisioning.md`](08-provisioning.md) | One-tap provisioning: the user creates only a Supabase account; the app creates the project, applies migrations from the fork, and stores Syla's key — via the Management API and a tiny OAuth relay. |
 | [`09-hosted-trial.md`](09-hosted-trial.md) | The hosted trial: onboarding's "try hosted Syla" — one account on a Sylos-run starter install, marked Trial everywhere, the move to your own, and the one schema knob (`hosted_trial`) that lets trials ask Syla. |
-| [`10-apps-and-chat.md`](10-apps-and-chat.md) | Apps and chat: every app a vibe hosted in your own database, the `default_app` setting, the two stock apps (Mash and Todos), and chat as the one deliberately centralized piece — Syla as a conversation, invites as messages, `chat_settings`, and what is deliberately not built yet. |
+| [`10-apps-and-chat.md`](10-apps-and-chat.md) | Apps and chat: every app a vibe hosted in your own database, the `default_app` setting, the two stock apps (Chat and Todos), and chat as the one deliberately centralized piece — Syla as a conversation, invites as messages, `chat_settings`, and what is deliberately not built yet. |
 
 ## The thirty-second version
 

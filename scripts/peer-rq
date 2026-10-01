@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-# peer-rq — the old name; the script is scripts/membership-rq now (skills/memberships).
-exec "$(cd "$(dirname "$0")" && pwd)/membership-rq" "$@"

@@ -1,6 +1,6 @@
 ---
 name: docs
-description: Creates, updates, moves, silos and deletes docs — self-contained HTML documents nested by folder-style paths, placed in the shared silos vocabulary that both organizes content and drives member visibility (a silo's members read what sits in it), every change captured in the row_edits undo log. Use when the user asks to add something to the docs, write up a topic as a doc, reorganize, re-silo, share or delete docs, or asks what the docs say.
+description: Creates, updates, moves, silos and deletes docs — self-contained HTML documents nested by folder-style paths, placed in the shared silos vocabulary that both organizes content and drives follower visibility (a silo's followers read what sits in it), every change captured in the row_edits undo log. Use when the user asks to add something to the docs, write up a topic as a doc, reorganize, re-silo, share or delete docs, or asks what the docs say.
 ---
 
 # Docs
@@ -104,16 +104,16 @@ scripts/rq "select path, title, updated_at from docs order by path"
 
 3. **Place the doc in silos** whenever you create one or its subject
    shifts. Silos are the same vocabulary as manual notes and do two jobs
-   at once: they organize the docs, and they decide member visibility —
-   a silo's members read exactly the records sitting in it (when their
-   own membership allows SQL — each silo_members row carries that
-   member's permissions; a doc in no silo is visible to no member unless the owner
-   has named a member directly on it — `doc_members`, owner-only, read it
+   at once: they organize the docs, and they decide follower visibility —
+   a silo's followers read exactly the records sitting in it (when their
+   own follow allows SQL — each silo_followers row carries that
+   follower's permissions; a doc in no silo is visible to no follower unless the owner
+   has named a follower directly on it — `doc_followers`, owner-only, read it
    but never write it). **Placement is therefore a sharing decision.**
    Read the vocabulary (names *and* descriptions are the rubric) and check
    who each silo currently exposes records to before using it; judge by
    meaning, never invent a silo, and when genuinely unsure whether a silo
-   fits, leave it off — a missing silo hides a doc from members, a wrong
+   fits, leave it off — a missing silo hides a doc from followers, a wrong
    one shows it:
 
    ```bash
@@ -123,19 +123,19 @@ scripts/rq "select path, title, updated_at from docs order by path"
           string_agg(
             m.email || case when sm.allows_sql then '' else ' (no sql)' end,
             ', ' order by m.email
-          ) as members
+          ) as followers
    from silos s
-   left join silo_members sm on sm.silo_id = s.id
-   left join members m on m.id = sm.member_id
+   left join silo_followers sm on sm.silo_id = s.id
+   left join followers m on m.id = sm.follower_id
    group by s.id, s.name order by s.name
    SQL
    scripts/doc-silo --path health/sleep --silos <silo-id>,<silo-id>
-   scripts/doc-silo --path health/sleep --silos ""   # fits nowhere; member-invisible
+   scripts/doc-silo --path health/sleep --silos ""   # fits nowhere; follower-invisible
    ```
 
    `--silos` is the doc's **full final set** (the RPC replaces, not
    appends). Placement changes are logged in `row_edits` like every other
-   doc change. Who belongs to each silo and what its members may ask is
+   doc change. Who belongs to each silo and what its followers may ask is
    the owner's call, made in the app's Manage tab — never edit those rules
    yourself.
 
@@ -196,7 +196,7 @@ If `scripts/rq` or a doc script fails on env or auth, stop and report — see
   something is wrong if data-URI images push past it.
 - Restoring a deleted doc (the app's restore, or yours in step 6) brings
   back the document alone — silo placements were separate junction rows,
-  so the doc returns siloless and therefore invisible to members. Re-place
+  so the doc returns siloless and therefore invisible to followers. Re-place
   it deliberately with `doc-silo`; the old silo set is visible in the
   junction's own `row_edits` entries.
 - The user sees the docs in the app's Docs tab, which renders each in a

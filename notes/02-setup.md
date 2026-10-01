@@ -111,6 +111,6 @@ Details: [`04-syla-jobs.md`](04-syla-jobs.md).
   stops working immediately. Deleting the secret fails the gate closed.
 - **Webhook token**: regenerate the API trigger token in the Claude Code
   UI, re-run `scripts/syla-set-webhook`.
-- **A member's key**: block or delete their row on the Manage page —
-  see [`05-members.md`](05-members.md).
+- **A follower's key**: block or delete their row on the Manage page —
+  see [`05-followers.md`](05-followers.md).
 - **Owner password**: Supabase → Authentication → Users.
