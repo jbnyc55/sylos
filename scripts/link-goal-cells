@@ -5,7 +5,7 @@
 #
 # The synergy job's write path: calls the link_goal_cells RPC, which
 # switches to the `claude` role and files one goal_cell_links group with
-# its members. Links are annotation — the cells themselves are untouched,
+# its cells. Links are annotation — the cells themselves are untouched,
 # and the owner sees (and can unlink) every group on the Goal map tab,
 # where the synergy score is computed from the live rankings. Idempotent:
 # cells already grouped stay grouped, a set overlapping one existing group

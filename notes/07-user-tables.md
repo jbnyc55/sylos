@@ -74,13 +74,13 @@ applying to every row.
 ## Where a user table lands: siloed or unsiloed, never invisible
 
 The moment the approved script creates the table, the siloing warden
-(`20261101000000_every_table_siloed.sql`, `notes/05-members.md`) registers
+(`20261101000000_every_table_siloed.sql`, `notes/05-followers.md`) registers
 it in `data_tables` as a whole table, turns RLS on, and installs the
-generic member read policy. It starts *unsiloed*: readable by no member,
+generic follower read policy. It starts *unsiloed*: readable by no follower,
 listed under Silo Soon on the Syla tab next to unsiloed notes and docs.
-From there the owner places the whole table in silos or names members on
-it (`table_silos` / `table_members`) — the only way its rows ever reach a
-member, through `member_rq` — or marks it siloed to keep it private. A
+From there the owner places the whole table in silos or names followers on
+it (`table_silos` / `table_followers`) — the only way its rows ever reach a
+follower, through `follower_rq` — or marks it siloed to keep it private. A
 user table cannot be declared per-row or system; the sandbox role holds
 no such power, and Syla has no write path into the placements. The same
 apply also gets the two grants the sandbox role was missing (execute on

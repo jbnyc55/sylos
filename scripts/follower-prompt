@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 #
-# member-prompt — queue a prompt for the owner, or read your answers.
+# follower-prompt — queue a prompt for the owner, or read your answers.
 #
-# The other kind of member request: where member-rq runs SQL directly (for
+# The other kind of follower request: where follower-rq runs SQL directly (for
 # silos that allow it), this queues a free-text prompt through the
-# member_submit_prompt RPC for the owner to run personally — they paste the
+# follower_submit_prompt RPC for the owner to run personally — they paste the
 # output back as the answer. One of your silos must have "propose prompts"
 # toggled on.
 #
 # Usage:
-#   scripts/member-prompt "how many workouts did I appear in this month?"
-#   scripts/member-prompt -               # stdin form for longer prompts
-#   scripts/member-prompt --list          # your requests, newest first
+#   scripts/follower-prompt "how many workouts did I appear in this month?"
+#   scripts/follower-prompt -               # stdin form for longer prompts
+#   scripts/follower-prompt --list          # your requests, newest first
 #
 # Environment (all required):
 #   SUPABASE_URL        https://<project-ref>.supabase.co
 #   SUPABASE_ANON_KEY   the anon / publishable key (client-public)
-#   MEMBER_TOKEN        the personal key from the app's Member access page
+#   FOLLOWER_TOKEN        the personal key from the app's Follower access page
 #                       (GUEST_TOKEN still honored as a fallback name)
 
 set -euo pipefail
@@ -28,8 +28,8 @@ if [ $# -lt 1 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
     exit 1
 fi
 
-MEMBER_TOKEN="${MEMBER_TOKEN:-${GUEST_TOKEN:-}}"
-for v in SUPABASE_URL SUPABASE_ANON_KEY MEMBER_TOKEN; do
+FOLLOWER_TOKEN="${FOLLOWER_TOKEN:-${GUEST_TOKEN:-}}"
+for v in SUPABASE_URL SUPABASE_ANON_KEY FOLLOWER_TOKEN; do
     [ -n "${!v:-}" ] || die "$v is not set"
 done
 
@@ -50,13 +50,13 @@ post() { # $1 = rpc name, $2 = json body
 
 if [ "$1" = "--list" ]; then
     q="select id, prompt, status, response, created_at, answered_at
-       from member_prompt_requests order by created_at desc"
-    post member_rq "$(jq -n --arg token "$MEMBER_TOKEN" --arg q "$q" '{_token: $token, q: $q}')"
+       from follower_prompt_requests order by created_at desc"
+    post follower_rq "$(jq -n --arg token "$FOLLOWER_TOKEN" --arg q "$q" '{_token: $token, q: $q}')"
     exit 0
 fi
 
 if [ "$1" = "-" ]; then prompt=$(cat); else prompt="$*"; fi
 [ -n "$(printf '%s' "$prompt" | tr -d '[:space:]')" ] || die "empty prompt"
 
-post member_submit_prompt \
-    "$(jq -n --arg token "$MEMBER_TOKEN" --arg p "$prompt" '{_token: $token, _prompt: $p}')"
+post follower_submit_prompt \
+    "$(jq -n --arg token "$FOLLOWER_TOKEN" --arg p "$prompt" '{_token: $token, _prompt: $p}')"

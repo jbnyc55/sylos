@@ -28,7 +28,7 @@ The idea, in four rules:
 
 | Folder | What it is |
 | ------ | ---------- |
-| `supabase/` | The database as versioned SQL migrations — schema, RLS, the `claude` role, the `row_edits` log, members, the Syla job scheduler (pg_cron → webhook → one generic routine), and the seeded base records: Syla's starter jobs and her **skills, which are docs** (`skills/…` rows in the `docs` table) |
+| `supabase/` | The database as versioned SQL migrations — schema, RLS, the `claude` role, the `row_edits` log, followers, the Syla job scheduler (pg_cron → webhook → one generic routine), and the seeded base records: Syla's starter jobs and her **skills, which are docs** (`skills/…` rows in the `docs` table) |
 | `scripts/` | The agent's database access: `rq` (read-only SQL over HTTPS) and structured write wrappers |
 | `notes/` | How the system works and how to operate it |
 

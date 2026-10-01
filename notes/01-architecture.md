@@ -21,7 +21,7 @@ host — and the apps it opens, which are **vibe code apps hosted in this
 database**: whole client-side apps stored one row each in
 `vibe_code_apps` and served over PostgREST like any other row. One of
 them is the one the shell boots straight into (`profiles.default_app`);
-two stock apps ship with every install — **Mash**, the chat app and the
+two stock apps ship with every install — **Chat**, the chat app and the
 default, and **Todos**, the classic tabs, quietly second in the
 switcher — and chat is the one deliberately centralized piece, living
 on the company's project rather than yours. `notes/10-apps-and-chat.md`
@@ -76,7 +76,7 @@ never directly to an auth user. The first profile created is crowned
 `is_owner` by trigger — that's the account you create in the app right
 after the first deploy (or the seeded user, if you customized the
 optional seed migration); app-management policies check `is_owner()`,
-because members and guests can hold auth sessions too.
+because followers and guests can hold auth sessions too.
 
 ## The principles
 
@@ -112,8 +112,8 @@ because members and guests can hold auth sessions too.
    registry (`data_tables`) kept by an event trigger holds one row per
    table saying which — or that it is system machinery, declared so by
    its migration. A new table, product or user-created, starts unsiloed
-   in the backlog and invisible to members; there is no third state
-   (`notes/05-members.md`).
+   in the backlog and invisible to followers; there is no third state
+   (`notes/05-followers.md`).
 7. **The agent's knowledge is data.** Syla's skills are docs (rows under
    `skills/` in the `docs` table, seeded by migration), and her job
    instructions are the docs attached to her scheduled events through

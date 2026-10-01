@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 #
-# member-rq — read-only SQL as a member, over HTTPS.
+# follower-rq — read-only SQL as a follower, over HTTPS.
 #
-# The members' rq: ships one statement to the member_rq RPC, which resolves
-# MEMBER_TOKEN to a member identity and executes as the `member` role inside
-# a read-only transaction. A member sees the jots and docs sitting in silos
-# where their own membership allows SQL (or naming them directly), those
-# silos, and their own member, membership and request rows — nothing else.
+# The followers' rq: ships one statement to the follower_rq RPC, which resolves
+# FOLLOWER_TOKEN to a follower identity and executes as the `follower` role inside
+# a read-only transaction. A follower sees the jots and docs sitting in silos
+# where their own follow allows SQL (or naming them directly), those
+# silos, and their own follower, follow and request rows — nothing else.
 # Grants are column-scoped, so name your columns: `select *` is refused. If
-# none of your memberships allows SQL, queue a prompt with
-# scripts/member-prompt instead.
+# none of your following allows SQL, queue a prompt with
+# scripts/follower-prompt instead.
 #
 # Usage:
-#   scripts/member-rq "select id, body, created_at from manual_notes order by created_at desc limit 20"
-#   scripts/member-rq - <<'SQL'         # stdin form; avoids shell-quoting pain
+#   scripts/follower-rq "select id, body, created_at from manual_notes order by created_at desc limit 20"
+#   scripts/follower-rq - <<'SQL'         # stdin form; avoids shell-quoting pain
 #   select n.body, n.created_at, s.name as silo
 #   from manual_notes n
 #   join note_silos j on j.note_id = n.id
@@ -27,7 +27,7 @@
 # Environment (all required):
 #   SUPABASE_URL        https://<project-ref>.supabase.co
 #   SUPABASE_ANON_KEY   the anon / publishable key (client-public)
-#   MEMBER_TOKEN        the personal key from the app's Member access page
+#   FOLLOWER_TOKEN        the personal key from the app's Follower access page
 #                       (GUEST_TOKEN still honored as a fallback name)
 
 set -euo pipefail
@@ -39,8 +39,8 @@ if [ $# -lt 1 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
     exit 1
 fi
 
-MEMBER_TOKEN="${MEMBER_TOKEN:-${GUEST_TOKEN:-}}"
-for v in SUPABASE_URL SUPABASE_ANON_KEY MEMBER_TOKEN; do
+FOLLOWER_TOKEN="${FOLLOWER_TOKEN:-${GUEST_TOKEN:-}}"
+for v in SUPABASE_URL SUPABASE_ANON_KEY FOLLOWER_TOKEN; do
     [ -n "${!v:-}" ] || die "$v is not set"
 done
 
@@ -50,10 +50,10 @@ if [ "$1" = "-" ]; then q=$(cat); else q="$*"; fi
 q="$(printf '%s' "$q" | sed -e 's/[[:space:];]*$//')"
 [ -n "$q" ] || die "empty query"
 
-body=$(jq -n --arg token "$MEMBER_TOKEN" --arg q "$q" '{_token: $token, q: $q}')
+body=$(jq -n --arg token "$FOLLOWER_TOKEN" --arg q "$q" '{_token: $token, q: $q}')
 
 if resp=$(curl -sS --fail-with-body \
-    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/member_rq" \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/follower_rq" \
     -H "apikey: ${SUPABASE_ANON_KEY}" \
     -H "content-type: application/json" \
     --data "$body"); then

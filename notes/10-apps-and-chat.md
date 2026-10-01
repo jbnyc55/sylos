@@ -36,7 +36,7 @@ exception the chat app used to enjoy.
 
 ## The home screen
 
-Logging in lands on a home screen in Mash's design language — a grid
+Logging in lands on a home screen in Chat's design language — a grid
 of apps, icon over name, the way a phone's home screen works. The old
 five-tab app is gone, split into its parts, each a separate app:
 **Chat**, **Notes**, **Docs**, **Todos**, **Goals** (opened from
@@ -55,15 +55,16 @@ Two doors into the grid, both on the dashed **New** tile:
 - **Copy one shared with you** — the "From silos you follow" shelf,
   rebuilt into your project as above.
 
-## Following, not membership
+## Following, all the way down
 
-The vocabulary is follow-shaped now, in the UI and the docs: you
-**follow** another Sylos (redeeming an invite, or `follow()` where the
-owner opened it — `20261114000000`); the people reading yours are your
-**followers**; what they see is decided by silos, exactly as before.
-The tables keep their names (`members`, `memberships`, `silo_members`)
-— this is wording, not schema — but product copy says "Following",
-"Followers", "silos you follow".
+The vocabulary is follow-shaped everywhere: you **follow** another
+Sylos (redeeming an invite, or `follow()` where the owner opened it —
+`20261114000000`); the people reading yours are your **followers**;
+what they see is decided by silos, exactly as before. The schema
+says the same words the product does
+(`20261119000000_followers_rename.sql`): `followers`, `following`,
+`silo_followers`, `follower_rq` — the member era's names are gone
+from copy and catalog alike.
 
 ## Chat: personal, all the way down
 
@@ -74,20 +75,20 @@ conversation has no host anywhere (`20261116000000_personal_chat.sql`):
   your project are the messages you sent — nothing else. Deleting your
   side is real deletion.
 - **A DM is a mutual follow.** Each side holds a `chats` row carrying
-  the same `chat_key` and names the other on it (`chat_members` →
-  your `members` rows). Naming a member IS the read grant: chats are
+  the same `chat_key` and names the other on it (`chat_followers` →
+  your `followers` rows). Naming a follower IS the read grant: chats are
   secret by audience and never siloed — a silo placement can widen a
   record to a whole shelf of followers, which is exactly what a DM
   must never do. Silos only ever govern what you deliberately archive
   out of a chat into your records, and that copy defaults to private.
 - **Reading a chat is a merge.** Your client interleaves your rows
   with each peer's, read from their database over your follower key
-  (`member_rq`, or their realtime channel while the app is open).
+  (`follower_rq`, or their realtime channel while the app is open).
   Nobody ever writes into anyone else's database.
 - **A group is a roster, locally copied.** Whoever assembles it mints
-  the `chat_key` and names the members; each member's client mirrors
+  the `chat_key` and names the followers; each follower's client mirrors
   the row into their own project and names the others back. Every
-  member holds their own copy of who is in the chat.
+  follower holds their own copy of who is in the chat.
 - **The company project keeps no chat index, no bodies, no social
   graph.** Its one chat duty is a stateless push hop: "wake this
   device", stored nowhere (the developer's `push-relay`). Who you
@@ -130,22 +131,22 @@ holds an owner JWT for a personal project.
 
 Making a chat partner a follower of your own project no longer needs a
 trip through settings. Chat mints the invite in *your* project
-(`mint_member_invite`, over the own-project session) and sends it as
+(`mint_follower_invite`, over the own-project session) and sends it as
 an invite message: the card carries your project's coordinates and the
 single-use code, and the recipient claims it in one tap
-(`claim_member_invite` against your project). The chat is just the
+(`claim_follower_invite` against your project). The chat is just the
 transport; the machinery is this starter's, unchanged
-(`notes/05-members.md`).
+(`notes/05-followers.md`).
 
 ## Your chat, your Syla
 
 Whether your Syla works a chat is your own flag on your own `chats`
 row — sweeps it for things to act on, so a DM about Friday dinner can
 end up as an event on your calendar, created through your project's
-gated write paths. Reading the other sides means using your member
+gated write paths. Reading the other sides means using your follower
 keys, so the consent is stated plainly: **enabling Syla on a chat
-means your agent processes what the other members wrote in their
-databases** — the same reality as any member copying a chat out by
+means your agent processes what the other followers wrote in their
+databases** — the same reality as any follower copying a chat out by
 hand. My Syla watching a chat says nothing about yours.
 
 ## Deliberately not built yet

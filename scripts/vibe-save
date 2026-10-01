@@ -29,7 +29,7 @@
 # passing the source dir on every deploy is the expected shape.
 #
 # --open-to-signed-in lets ANY signed-in session open the app (not just the
-# owner and its members) via set_vibe_code_app_open; --owner-only takes
+# owner and its followers) via set_vibe_code_app_open; --owner-only takes
 # that back. The flag is sticky — a plain redeploy leaves it as it was.
 # What an open app shows is still decided by its data tables' RLS.
 #

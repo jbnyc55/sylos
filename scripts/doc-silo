@@ -5,7 +5,7 @@
 # The docs' silo-note: calls the set_doc_silos RPC, which switches to the
 # `claude` role and replaces the doc's doc_silos rows with exactly the
 # given silo ids. An empty --silos takes the doc out of every silo — it
-# then shares nowhere and no member can see it (unless named directly).
+# then shares nowhere and no follower can see it (unless named directly).
 # Idempotent, and every add/remove is captured in row_edits by trigger.
 #
 # Usage:
