@@ -85,6 +85,17 @@ conversation has no host anywhere (`20261116000000_personal_chat.sql`):
   with each peer's, read from their database over your follower key
   (`follower_rq`, or their realtime channel while the app is open).
   Nobody ever writes into anyone else's database.
+- **Messages carry author and kind** (`20261121000000_chat_first.sql`).
+  `author` is `'me'` or `'syla'` — an approved draft sends as the
+  human; only rule-gated auto mode sends as Syla, and only through the
+  gated RPCs. `kind` is how every cross-person feature travels as an
+  attributed message on the sender's side: `auto_reply` (my Syla sent
+  this under an active reply rule — the receiving client renders
+  "signed as Syla" and the two chips), `ask_human` (the travelling
+  ask-for-the-human flag — the receiving client marks its chat
+  `waiting_on_human`, the blue dot), `syla_status` (Syla's own lines in
+  the Syla chat). No drafts, rules or conclusions ever travel — those
+  stay local (`notes/11-connections-and-reply-rules.md`).
 - **A group is a roster, locally copied.** Whoever assembles it mints
   the `chat_key` and names the followers; each follower's client mirrors
   the row into their own project and names the others back. Every
@@ -103,29 +114,40 @@ including the social graph.
 
 ## Syla is a conversation
 
-Talking to your agent stops being an inbox tab and becomes a chat:
-every person has one agent conversation, where Syla reports her runs,
-asks her questions, and surfaces **proposal cards**. The card is a
-pointer. The proposal it points to still lives in your own database,
-created through the same gated RPCs as always
-(`notes/03-agent-access.md`), and approving or rejecting it is a write
-to your own project under your own session. The boundary does not move
-— the agent still cannot touch your data without an approved proposal
-— only the place you review things does.
+Talking to your agent stops being an inbox tab and becomes a chat: one
+seeded conversation per owner (`chats.kind = 'syla'`, pinned by kind,
+local only — never mirrored to a peer). Sending is `send_to_syla()`,
+which now also writes your message into the thread linked to its
+queued run; the thread then shows the real receipt ladder off that run
+(Sent · Delivered · Syla's reading — `notes/04-syla-jobs.md`), and her
+reply arrives through `syla_chat_say`, pointing back at the same run.
 
-## The hosted agent, in one paragraph
+In every *other* chat her presence is drafts and rules: a pending
+`chat_reply_proposals` card under the thread ("Syla drafted a reply"),
+approved by you and sent as you; an auto-reply only where the
+connection's ladder and an active reply rule allow it
+(`notes/11-connections-and-reply-rules.md`). Anything heavier — a
+Syla × Syla conclusion, a calendar add she inferred from a chat, a
+silo membership change — is a `syla_approvals` card in the Inbox. The
+card is a pointer; the proposal lives in your own database, created
+through the same gated RPCs as always (`notes/03-agent-access.md`),
+and approving is a write under your own session. The boundary does not
+move — the agent still cannot touch your data without an approved
+proposal — only the place you review things does. The Chats tab
+signals the backlog ("2 things to approve · Waiting in your Inbox" →
+Home's badged Inbox tile), and the Inbox's footer states the contract:
+nothing Syla agrees to is final until you approve it there.
 
-By default nobody meets a Claude setup screen: a person's agent runs
-hosted, on the company's account, and Settings offers "use your own"
-for anyone who wants today's own-routine setup instead. What keeps a
-pooled agent user-scoped is not which account fired it but a
-**dedicated Supabase session its user deposited** on the company
-project — a second sign-in with its own refresh-token family — which a
-claimed job hands to the agent session, so it acts as that user under
-plain RLS there. Work on your **own** project is untouched by all of
-this: it still goes through your project's rq key — the `claude` role,
-narrow gated writes, proposals, the undo log — and the agent never
-holds an owner JWT for a personal project.
+## Your Claude, nobody else's
+
+Syla runs on **your own Claude account, full stop** — the hosted trial
+and the hosted-agent defaults are gone (`notes/09-hosted-trial.md` is
+historical; `20261127000000` removed the last schema knob). The web
+setup at getsylos.com/setup walks the Claude environment and routine
+steps alongside the database ones (`notes/02-setup.md`), and the
+access story never changes hands: your project's rq key — the `claude`
+role, narrow gated writes, proposals, the undo log — and the agent
+never holds an owner JWT or the management credential.
 
 ## Following feels like a DM
 

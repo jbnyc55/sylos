@@ -40,32 +40,56 @@ create, retime, or delete an event — that is the owner's calendar.
 
 ## The dispatcher
 
-`syla_dispatch()` runs every minute under pg_cron. Each tick it queues a
-run for every due Syla event (one-offs, daily and weekly rules;
-`until_date` and `event_exclusion` honored; `last_fired_on` is the
-once-a-day latch, reset by the event trigger so a rescheduled event
-never fires retroactively), fails runs that were claimed but never
-finished within 2 hours or that three webhook fires couldn't get
-claimed, and POSTs the routine's fire endpoint once for everything
-still queued. Event times are the owner's local wall clock — the zone
-is pinned in the dispatcher and the latch trigger (`America/New_York`
-in the starter; edit both if yours differs).
+`syla_dispatch()` runs every minute under pg_cron. Each tick it:
+
+- marks **deliveries** — runs whose stored `fire_request_id` has a 2xx
+  row in `net._http_response` get `delivered_at` stamped (pg_net
+  answers asynchronously, so this lags a fire by at most a tick);
+- queues a run for every due Syla event (one-offs, daily and weekly
+  rules; `until_date` and `event_exclusion` honored; `last_fired_on` is
+  the once-a-day latch, reset by the event trigger so a rescheduled
+  event never fires retroactively);
+- runs the **chute branch**: per profile, when the cadence in
+  `chute_settings` says a sort is due (vs `last_sorted_at`, same latch
+  style) *and* raw `chute_items` are waiting, it queues a run of the
+  seeded Chute sort event — which is pre-latched forever, so only this
+  branch ever fires it (`notes/12-chute.md`);
+- fails runs that were claimed but never finished within 2 hours or
+  that three webhook fires couldn't get claimed;
+- POSTs the routine's fire endpoint once for everything still queued.
+
+Event times are the owner's local wall clock — the zone is pinned in
+the dispatcher and the latch trigger (`America/New_York` in the
+starter; edit both if yours differs).
 
 Failure is designed to be visible, never silent: no Vault credential →
 runs sit `queued`; webhook lost → re-fired up to 3 times, then `failed`
 with a reason; session died → `failed` after 2 hours.
 
-One path skips the tick entirely: the app's **send to Syla** calls
-`send_to_syla()` (owner-only on a personal install — every signed-in
-profile on the hosted-trial project — SECURITY DEFINER), which creates a
-pre-latched one-off event on her calendar — the waking — with one
-child todo carrying the task (subject as title, full message in
-`todo.details`), queues its run, and fires the webhook inline with the
-same Vault credential, so she wakes immediately. She closes the loop
-with a complete proposal carrying her report in `after.details`;
-approving it from the Inbox checks the todo off and appends the report
-to its details. Without a stored credential the run just waits for the
-next dispatcher tick, like everything else.
+Two paths skip the tick entirely, both queue-and-fire-inline with the
+same Vault credential: the chute's **Sort now** (`sort_chute_now()`),
+and the Syla thread's send. **send to Syla** calls `send_to_syla()`
+(owner-only, SECURITY DEFINER), which creates a pre-latched one-off
+event on her calendar — the waking — with one child todo carrying the
+task (subject as title, full message in `todo.details`), mirrors the
+message into the Syla conversation (`chats.kind='syla'`) linked to the
+run, queues the run, and fires the webhook inline, so she wakes
+immediately. She closes the loop twice: a complete proposal carrying
+her report in `after.details` (approving it from the Inbox checks the
+todo off), and a reply in the thread via `syla_chat_say(_body,
+_run_id)`. Without a stored credential the run just waits for the next
+dispatcher tick, like everything else.
+
+## Receipts in the Syla thread
+
+Every rung of the thread's receipt ladder is a recorded fact on the
+run, never an inference: **Sent** = `queued_at` (the run exists) ·
+**Delivered** = `delivered_at` (the fire webhook answered 2xx — which
+says the routine service took the request, nothing more) · **Syla's
+reading** = `started_at` (a session claimed the run) · the reply = a
+`chat_messages` row with `syla_run_id` pointing back. "Reading" is
+never inferred from the webhook; the `syla_job_runs` queue is the
+source of truth.
 
 ## The webhook credential
 
@@ -81,9 +105,11 @@ only.
 
 ## The docs are the instructions
 
-The starter seeds four Syla events the moment the owner's account is
+The starter seeds five Syla events the moment the owner's account is
 crowned, each attached to its doc: `syla/note-siloing`,
-`syla/edit-feedback`, `syla/goal-synergy`, `syla/daily-summary`. Edit a
+`syla/edit-feedback`, `syla/goal-synergy`, `syla/daily-summary`,
+`syla/chute-sort` (the Chute sort — dispatched by the chute branch, not
+the due-scan). Edit a
 doc in the app (or via `scripts/doc-save`) and the event behaves
 differently on its next run; every edit is in `row_edits`, so a bad
 instruction change is one restore away.
