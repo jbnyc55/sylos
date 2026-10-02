@@ -69,16 +69,18 @@ with a reason; session died → `failed` after 2 hours.
 Two paths skip the tick entirely, both queue-and-fire-inline with the
 same Vault credential: the chute's **Sort now** (`sort_chute_now()`),
 and the Syla thread's send. **send to Syla** calls `send_to_syla()`
-(owner-only, SECURITY DEFINER), which creates a pre-latched one-off
-event on her calendar — the waking — with one child todo carrying the
-task (subject as title, full message in `todo.details`), mirrors the
-message into the Syla conversation (`chats.kind='syla'`) linked to the
-run, queues the run, and fires the webhook inline, so she wakes
-immediately. She closes the loop twice: a complete proposal carrying
-her report in `after.details` (approving it from the Inbox checks the
-todo off), and a reply in the thread via `syla_chat_say(_body,
-_run_id)`. Without a stored credential the run just waits for the next
-dispatcher tick, like everything else.
+(owner-only, SECURITY DEFINER), which writes the owner's message into
+the Syla conversation (`chats.kind='syla'`) linked to a queued run
+with NO event (`syla_job_runs.event_id` null — the message is the
+run's instruction, returned by the claim as `message`), and fires the
+webhook inline, so she wakes immediately. Nothing lands on the
+calendar or the todo list at send time: not every message is a task,
+so SYLA decides what it deserves — real work becomes a
+`propose_todo_edit` 'add' proposal (a todo, or a timed event for the
+calendar) the owner approves in the Inbox; a question or a passing
+thought gets only her reply in the thread via `syla_chat_say(_body,
+_run_id)`. Without a stored credential the run just waits for the
+next dispatcher tick, like everything else.
 
 ## Receipts in the Syla thread
 
