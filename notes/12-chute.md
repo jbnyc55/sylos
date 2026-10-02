@@ -55,9 +55,14 @@ an event — its doc is the instructions, its history shows in Syla Jobs
 — but it is **pre-latched forever** (`last_fired_on = 9999-12-31`): the
 dispatcher's generic due-scan never fires it. The chute branch in
 `syla_dispatch()` is its only dispatcher, keyed off `chute_settings` +
-raw items (`notes/04-syla-jobs.md`). Deleting the event is healed by
-the next Sort now; retiming it in the app resets the latch and merely
-adds the generic daily firing alongside the cadence.
+raw items (`notes/04-syla-jobs.md`). The event's time block is display
+only, and a trigger keeps it mirroring the cadence
+(`chute_settings_mirror_event`: daily → the chosen time, thrice →
+09:00–18:00, hourly → all day), re-pinning the latch after each
+retime — so Syla Jobs shows the real schedule. Deleting the event is
+healed by the next Sort now; retiming it by hand in the calendar still
+resets the latch and merely adds the generic daily firing alongside
+the cadence.
 
 ## Boundaries
 
