@@ -98,6 +98,25 @@ members' lists at once, and the chat's details page gathers the members
 so each one's list is a tap away. Every write those screens make is an
 ordinary per-person `reply_rules` write.
 
+## The poke — how Syla learns a message arrived
+
+A peer's message lands in *their* database, so nothing here ever
+changed when one arrived — and nothing woke Syla. The sender's side
+closes the gap (`20261214000000_chat_pokes.sql`): after a send, the
+sender's client (or their Syla, after an auto-reply — the relay's
+`poke` kind, `scripts/following-poke`) calls `follower_poke_chat()` in
+the *recipient's* database with its follower token and the shared
+`chat_key`. The knock carries no text; it is gated by the chat's own
+roster (only a dm or group whose `chat_followers` row names that
+follower), recorded in `chat_pokes`, and it queues an event-less
+`syla_job_runs` row and fires the routine webhook inline —
+`send_to_syla`'s arrangement exactly. The claim entry's `poke` field
+names the chat and who knocked; Syla then reads the whole thread (her
+side plus the relay) and acts by the reply ladder above. Pokes landing
+while a poke run is still queued coalesce onto it, so rapid messages
+cost one waking, and the owner can see every knock (and block a noisy
+follower) like any other row.
+
 ## Receiving the other side
 
 A peer's auto-reply arrives as *their* message row with
