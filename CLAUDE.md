@@ -67,7 +67,10 @@ generic on purpose; the work is in the queue:
 
    An owner's **send to Syla** arrives as a run with NO event: the
    claim entry's `message` field carries their words (the linked row
-   in the Syla conversation). A message may or may not be a task —
+   in the Syla conversation), and `message_upload_id` names an
+   attached file when one rides the message — `scripts/file-url
+   <upload_id>` answers a signed link; look at the file before
+   deciding. A message may or may not be a task —
    read it and decide. Only real work deserves entries: file them
    with `scripts/propose-todo-edit --kind add` (a todo, or a timed
    event for the calendar; the owner approves in the Inbox). A

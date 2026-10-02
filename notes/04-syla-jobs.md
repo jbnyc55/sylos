@@ -72,7 +72,9 @@ and the Syla thread's send. **send to Syla** calls `send_to_syla()`
 (owner-only, SECURITY DEFINER), which writes the owner's message into
 the Syla conversation (`chats.kind='syla'`) linked to a queued run
 with NO event (`syla_job_runs.event_id` null — the message is the
-run's instruction, returned by the claim as `message`), and fires the
+run's instruction, returned by the claim as `message`; a file attached
+to the message rides as `chat_messages.upload_id` and the claim names
+it as `message_upload_id`, for `scripts/file-url`), and fires the
 webhook inline, so she wakes immediately. Nothing lands on the
 calendar or the todo list at send time: not every message is a task,
 so SYLA decides what it deserves — real work becomes a

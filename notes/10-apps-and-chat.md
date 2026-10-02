@@ -96,6 +96,14 @@ conversation has no host anywhere (`20261116000000_personal_chat.sql`):
   `waiting_on_human`, the blue dot), `syla_status` (Syla's own lines in
   the Syla chat). No drafts, rules or conclusions ever travel — those
   stay local (`notes/11-connections-and-reply-rules.md`).
+- **An attachment is a reference, never a travelling file**
+  (`20261211000000_chat_attachments.sql`). A message may carry
+  `upload_id` — a row in the sender's content-addressed `uploads`
+  store, the same place the chute's drops land. The bytes stay in the
+  sender's private bucket: a peer's client sees over `follower_rq`
+  that an attachment exists (and any caption) and renders the fact of
+  it; cross-database file delivery would need a signed-URL relay and
+  is deliberately its own future feature.
 - **A group is a roster, locally copied.** Whoever assembles it mints
   the `chat_key` and names the followers; each follower's client mirrors
   the row into their own project and names the others back. Every
