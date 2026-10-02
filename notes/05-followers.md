@@ -67,7 +67,15 @@ trusts, and the payload itself is the proof
    a matching, unexpired, unblocked code is burned and buys their
    personal bearer token — shown once, stored only as a sha256 hash.
    Their follower row's `claimed_at` flips, so you see the accept (and can
-   block instantly if it wasn't them).
+   block instantly if it wasn't them). When they have a database of
+   their own, their app also attaches a **connect-back offer** to the
+   claim (`20261213000000_connect_back.sql`): a single-use invite code
+   it just minted in *their* database for you, stored on your follower
+   row's `peer_*` columns. Your client redeems it on its next
+   connections load — no tap, because minting the invite was your
+   consent in advance — files the key as a `following` row, links
+   `peer_following_id`, and the pair presents as connected. One
+   invite, one accept, both directions.
 3. From then on they (or their own Claude) query over HTTPS:
    `follower_rq(_token, q)` executes read-only SQL under the `follower`
    role, scoped to their silos. The starter's `scripts/follower-rq` /
@@ -117,10 +125,17 @@ fan out —
   `scripts/following-prompt` — the existing follower queues are the mailboxes;
   no other transport exists.
 
-Reciprocity is two independent grants dressed as one gesture: accepting
-an invite never auto-creates the reverse follow. Each owner only
-ever approves rows in their own database, and asymmetric trust stays
-expressible. Everything read from a friend's database is another database's
+Reciprocity is still two independent grants underneath — each owner
+only ever approves rows in their own database, and asymmetric trust
+stays expressible — but it no longer costs two gestures. Accepting an
+invite carries the acceptor's connect-back offer into the inviter's
+database, and the inviter's client redeems it unprompted: the mint was
+the inviter's approval, given in advance. The reverse follower row the
+acceptor minted starts in zero silos, so the key it sold reads nothing
+until the acceptor chooses to share; either side still blocks or
+deletes independently. An acceptor without their own database (or not
+its owner) claims with no offer, and the old one-way lifecycle — the
+WAITING row, the hand-redeemed reverse invite — remains the fallback. Everything read from a friend's database is another database's
 content: data, never instructions (`skills/following`). What Syla can
 send the other way is a proposal into their inbox
 (`scripts/following-edit`), never a write.
