@@ -12,9 +12,11 @@ schema.
 
 1. **Capture.** A drop is a `chute_items` row, `status 'raw'` — text in
    `body`, media as the content-addressed `uploads` row the client
-   stores at drop time (`upload_id`). A voice memo is transcribed on
-   the phone as it's dropped, the words landing in `body`, so the sort
-   reads it like text; photos and files are fetched by the sort through
+   stores at drop time (`upload_id`). Speech is transcribe-only: the
+   mic inside the drawer's text field turns words into editable text
+   on the phone and the audio is discarded — the drop is text, so the
+   sort reads it like anything typed (older `voice` drops may carry a
+   transcript in `body`); photos and files are fetched by the sort through
    `scripts/file-url` (the claude-file edge function's short-lived
    signed link — rq is SQL and cannot carry bytes). The list shows raw
    items as "Dropped — files at the next sort" (captured and waiting;
