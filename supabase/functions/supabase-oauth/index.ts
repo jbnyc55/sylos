@@ -20,23 +20,26 @@
 // code is single-use, PKCE-bound to the app that started the flow, and
 // tokens go only to that caller.
 //
-// Two clients share it: the iOS app, whose callback is the sylos://
-// scheme, and the web app at getsylos.com/app, which runs the same flow
-// in the browser. The web app marks its flow in the OAuth `state`
-// (`web:<nonce>`, or `local:<nonce>` from a dev server), and GET
-// /callback sends that browser back to the web app's own return address
-// — a fixed allow-list below, never a URL taken from the request, so the
-// callback can't be turned into an open redirect. The POST routes answer
-// CORS preflights for the same reason: a browser has to be able to call
-// them, and possession of the relay URL still grants nothing without a
-// fresh, PKCE-bound code.
+// Several clients share it: the iOS app, whose callback is the sylos://
+// scheme, and the browser flows at getsylos.com — the web app at /app and
+// the desktop setup flow at /setup — which run the same exchange in the
+// browser. A browser flow marks itself in the OAuth `state` (`web:<nonce>`
+// from the web app, `setup:<nonce>` from the setup flow, `local:<nonce>`
+// from a dev server), and GET /callback sends that browser back to the
+// flow's own return address — a fixed allow-list below, never a URL taken
+// from the request, so the callback can't be turned into an open redirect.
+// The POST routes answer CORS preflights for the same reason: a browser
+// has to be able to call them, and possession of the relay URL still
+// grants nothing without a fresh, PKCE-bound code.
 
 const TOKEN_URL = "https://api.supabase.com/v1/oauth/token";
 const APP_SCHEME = "sylos://supabase-oauth";
 // Where a web flow lands after consent, by state prefix. WEB_CALLBACK_URL
-// overrides the production address (a preview deployment, say).
+// and SETUP_CALLBACK_URL override the production addresses (a preview
+// deployment, say).
 const WEB_RETURNS: Record<string, string> = {
   web: Deno.env.get("WEB_CALLBACK_URL") ?? "https://getsylos.com/app/oauth",
+  setup: Deno.env.get("SETUP_CALLBACK_URL") ?? "https://getsylos.com/setup/oauth",
   local: "http://localhost:5173/app/oauth",
 };
 

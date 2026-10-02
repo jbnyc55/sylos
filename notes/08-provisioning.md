@@ -1,16 +1,21 @@
-# One-tap provisioning — the app builds the database
+# Provisioning — the client builds the database
 
-Onboarding used to walk the owner through the Supabase dashboard:
-organization, project, the GitHub integration, copying keys, pasting a
-vault snippet into the SQL editor. All of that is now one tap. The user
-creates a Supabase **account** (that part stays — it's theirs, and the
-project lives under it), signs in once through OAuth, and the app does
-everything else itself over the [Supabase Management
+Nobody walks the Supabase dashboard: the user creates a Supabase
+**account** (that part stays — it's theirs, and the project lives under
+it), consents once through OAuth, and the client does everything else
+over the [Supabase Management
 API](https://supabase.com/docs/guides/integrations/build-a-supabase-oauth-integration).
-The machinery is `SupabaseProvision.swift` in the app repo plus one edge
-function, `supabase/functions/supabase-oauth/`.
+Two clients carry the power at different times (`notes/02-setup.md`):
+the **web setup flow** at getsylos.com/setup provisions the project in
+the browser tab, then hands the management credential to the phone by
+QR and discards its copy; from then on the **iPhone is the standing
+runner** — the refresh token lives in its Keychain, and it applies new
+migrations and function deploys quietly on every launch. The machinery
+is `SupabaseProvision.swift` in the app repo, the setup pages in
+sylos-company `web/`, plus one edge function,
+`supabase/functions/supabase-oauth/`.
 
-## What the app does after "Connect Supabase"
+## What the provisioner does after "Authorize"
 
 1. **OAuth** — `api.supabase.com/v1/oauth/authorize` in an
    ASWebAuthenticationSession (PKCE). Supabase only registers HTTPS
@@ -62,22 +67,28 @@ the GitHub integration exactly as before — the runner skips nothing it
 didn't apply itself, and `applied_migrations` only tracks app-applied
 files.
 
-## The web app runs the same flow
+## The browser flows, and how each gets back
 
-getsylos.com/app (the browser client, in sylos-company `web/`) is a
-second client of the same OAuth app and relay. It differs only in how
-the browser gets back: it marks its flow in the OAuth `state`
-(`web:<nonce>`; `local:<nonce>` from a Vite dev server) and the relay's
-`GET /callback` sends that browser to `https://getsylos.com/app/oauth`
-(`WEB_CALLBACK_URL` overrides it; `http://localhost:5173/app/oauth` for
-`local:`) — a fixed allow-list in the relay, never a URL taken from the
-request. The relay also answers CORS preflights on its POST routes for
-the same reason. The Management API calls themselves are made straight
-from the browser, as on the phone; the tokens live in that browser's
-storage. The migration source is read through GitHub's git-trees API
-(one call for the whole tree) plus raw.githubusercontent.com. Both
-`applied_migrations` and `deployed_functions` are the same ledgers, so a
-project set up from the phone keeps in step from the web and back.
+The web setup flow (getsylos.com/setup — where new installs are born)
+and the web app (getsylos.com/app) are clients of the same OAuth app
+and relay. A browser flow differs only in how it returns: it marks
+itself in the OAuth `state` (`setup:<nonce>` from the setup flow,
+`web:<nonce>` from the web app, `local:<nonce>` from a Vite dev
+server) and the relay's `GET /callback` sends that browser to its
+fixed return address — `https://getsylos.com/setup/oauth`
+(`SETUP_CALLBACK_URL` overrides it), `https://getsylos.com/app/oauth`
+(`WEB_CALLBACK_URL`), or `http://localhost:5173/app/oauth` — an
+allow-list in the relay, never a URL taken from the request. The relay
+also answers CORS preflights on its POST routes for the same reason.
+The Management API calls themselves are made straight from the
+browser, as on the phone; the tokens live only in that tab, and the
+setup flow discards them after the QR handoff (re-summoning power
+later, on /devices, by silent re-consent). The migration source is
+read through GitHub's git-trees API (one call for the whole tree) plus
+raw.githubusercontent.com. `applied_migrations` and
+`deployed_functions` are the same ledgers everywhere — and
+`schema_version()` serves them to any client — so a project set up on
+the web keeps in step from the phone and back.
 
 ## The relay, and why it exists
 
@@ -141,9 +152,11 @@ host too (`PUSH_RELAY_URL` overrides it).
 ## Trust story
 
 - The Management API token acts **as the user**, on their own account —
-  the same authority they'd exercise clicking the dashboard. It never
-  leaves the device, and Syla never holds it: her access remains the
-  `claude` role behind the rq key, exactly as
+  the same authority they'd exercise clicking the dashboard. Its one
+  transfer is the setup QR (burn-on-redeem, 10-minute expiry —
+  `notes/02-setup.md`); its standing home is the iPhone's Keychain; it
+  is never at rest in any database, and Syla never holds it: her
+  access remains the `claude` role behind the rq key, exactly as
   [`03-agent-access.md`](03-agent-access.md) describes.
 - The relay holds the OAuth client secret and nothing else; possession
   of the relay URL grants nothing without a fresh, PKCE-bound

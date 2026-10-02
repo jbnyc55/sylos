@@ -1,6 +1,15 @@
-# The hosted trial — your database, Sylos's Claude
+# The hosted trial — your database, Sylos's Claude *(historical)*
 
-Onboarding opens on a choice: **set up my own** (the checklist in
+> **Removed.** The chat-first rebuild deleted hosted Syla along with
+> the iOS onboarding: setup is the desktop web flow at
+> getsylos.com/setup, own Claude only ([`02-setup.md`](02-setup.md)),
+> and `20261127000000_remove_hosted_trial.sql` took the last schema
+> knob (`hosted_trial()`, and `send_to_syla`'s every-profile widening)
+> back out. The company-side slots and registry are retired with it.
+> This note stays as the record of what the trial was and why its one
+> schema artifact existed.
+
+Onboarding opened on a choice: **set up my own** (the checklist in
 [`02-setup.md`](02-setup.md) / [`08-provisioning.md`](08-provisioning.md) —
 your Supabase, your Claude, everything yours) or **try hosted Syla**.
 

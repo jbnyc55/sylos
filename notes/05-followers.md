@@ -5,6 +5,23 @@ personal key to *your* database and can query exactly what your silos
 grant, and no more; the owner's standing configuration is the whole
 contract.
 
+## Connections — how the app presents all of this
+
+The product says **connection** where this note says follower and
+following: one person, both directions, one lifecycle (in contacts →
+invited → wants to connect → connected) in the Connections app on Home.
+The presentation is a thin layer over everything below —
+`followers.peer_following_id` links your roster row for a person to
+your `following` row for their database, and both halves present as
+*connected*; the directional machinery, the invite flow and every
+grant stay exactly as this note describes
+(`20261120000000_connections.sql`, `notes/11-connections-and-reply-rules.md`).
+Each connection also carries the owner's reply ladder for that person
+(`followers.syla_reply_mode` and the `reply_rules` preflight) — reply
+semantics live **there**, on the connection; silos stay pure data
+slices, their definitions spelled out as `silo_rules` sentences, with
+zero say over who Syla answers.
+
 ## Silos
 
 `silos` is one vocabulary doing two jobs: organizing content (notes and
