@@ -13,7 +13,8 @@ schema.
 1. **Capture.** A drop is a `chute_items` row, `status 'raw'` — text in
    `body`, media as the content-addressed `uploads` row the client
    stores at drop time (`upload_id`). The list shows raw items as
-   "Syla's listening…".
+   "Dropped — files at the next sort" (captured and waiting; nothing
+   reads it before the sort).
 2. **Sort.** On the cadence in `chute_settings` — `hourly`, `thrice`
    (the fixed trio 09:00 / 13:00 / 18:00 local), or `daily` at
    `daily_time` (default 15:00) — the dispatcher queues a run of the
