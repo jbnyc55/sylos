@@ -12,9 +12,13 @@ schema.
 
 1. **Capture.** A drop is a `chute_items` row, `status 'raw'` — text in
    `body`, media as the content-addressed `uploads` row the client
-   stores at drop time (`upload_id`). The list shows raw items as
-   "Dropped — files at the next sort" (captured and waiting; nothing
-   reads it before the sort).
+   stores at drop time (`upload_id`). A voice memo is transcribed on
+   the phone as it's dropped, the words landing in `body`, so the sort
+   reads it like text; photos and files are fetched by the sort through
+   `scripts/file-url` (the claude-file edge function's short-lived
+   signed link — rq is SQL and cannot carry bytes). The list shows raw
+   items as "Dropped — files at the next sort" (captured and waiting;
+   nothing reads it before the sort).
 2. **Sort.** On the cadence in `chute_settings` — `hourly`, `thrice`
    (the fixed trio 09:00 / 13:00 / 18:00 local), or `daily` at
    `daily_time` (default 15:00) — the dispatcher queues a run of the

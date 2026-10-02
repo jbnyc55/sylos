@@ -72,6 +72,13 @@ verify_jwt = false
 [functions.push]
 verify_jwt = false
 
+# Syla's eyes on a stored file: a signed-URL minter for the private
+# uploads bucket. verify_jwt is OFF because her sessions carry no user
+# JWT; the gate is the x-claude-rq-key header, checked in SQL
+# (claude_file_target), the same gate every agent path has.
+[functions.claude-file]
+verify_jwt = false
+
 # The following relay: Syla reaches a friend's database through her own
 # project (POST /following-relay), so her sessions need no network
 # allowance per friend and the friend's token never leaves the vault's
