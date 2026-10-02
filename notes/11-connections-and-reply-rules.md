@@ -86,6 +86,19 @@ REPLY — whether the sentence truly covered the message is Syla's
 preflight (`skills/chat-replies`), attributable after the fact because
 every auto-reply carries `rule_id` and every edit is in `row_edits`.
 
+**The read fence** (`20261212000000`): the send also carries
+`_thread_read_at` — `now()` taken from Syla's final re-read of the
+thread, made immediately before sending. The function refuses a read
+older than 90 seconds, a read in the future, and any message on the
+owner's own side newer than it, so the window between "Syla last saw
+the thread" and "the message exists" is bounded by the clock instead
+of her think time, and a send without a fresh read behind it is
+structurally impossible. The peer's side lives in *their* database,
+out of SQL's sight — re-reading it in the same breath, restarting the
+preflight when anything new appeared, and stopping entirely when the
+new message asks for the human, is procedure, bound in
+`skills/chat-replies` and attributable like sentence coverage.
+
 ## Receiving the other side
 
 A peer's auto-reply arrives as *their* message row with
