@@ -15,10 +15,11 @@
 // reaches the session. The target is always a stored follow's own
 // project_url — this is not an open proxy.
 //
-// POST { name, kind, q? | prompt? | proposal? }
+// POST { name, kind, q? | prompt? | proposal? | chat_key? }
 //   kind "rq"      → their follower_rq(_token, q)            read-only SQL
 //   kind "prompt"  → their follower_submit_prompt(_token, _prompt)
 //   kind "edit"    → their follower_submit_edit(_token, _proposal)
+//   kind "poke"    → their follower_poke_chat(_token, _chat_key)
 // The friend's answer comes back as it is, status included.
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
@@ -39,6 +40,7 @@ const CALLS: Record<string, { rpc: string; field: string; arg: string }> = {
   rq: { rpc: 'follower_rq', field: 'q', arg: 'q' },
   prompt: { rpc: 'follower_submit_prompt', field: 'prompt', arg: '_prompt' },
   edit: { rpc: 'follower_submit_edit', field: 'proposal', arg: '_proposal' },
+  poke: { rpc: 'follower_poke_chat', field: 'chat_key', arg: '_chat_key' },
 }
 
 Deno.serve(async (req) => {
@@ -58,7 +60,7 @@ Deno.serve(async (req) => {
   const kind = typeof body.kind === 'string' ? body.kind : ''
   const call = CALLS[kind]
   if (!name) return json(400, { error: 'name (the follow) is required' })
-  if (!call) return json(400, { error: 'kind must be rq, prompt or edit' })
+  if (!call) return json(400, { error: 'kind must be rq, prompt, edit or poke' })
   const value = body[call.field]
   if (typeof value !== 'string' || !value.trim()) {
     return json(400, { error: `${call.field} is required for kind ${kind}` })

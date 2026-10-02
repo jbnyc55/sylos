@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#
+# following-poke — knock at a friend's database: "I just posted in our chat".
+#
+# The sender-side poke (skills/chat-replies): after sending an
+# auto-reply into a chat whose person you also follow back, poke their
+# database so THEIR Syla wakes, reads the thread and acts by their own
+# reply ladder. Carries no text — their side reads the thread over the
+# relay like always. Every call goes through your own project's
+# following-relay; their follower_poke_chat checks the chat's roster
+# names you.
+#
+# Find the name with scripts/following-list (case doesn't matter).
+#
+# Usage:
+#   scripts/following-poke alex <chat_key>
+#
+# Environment (all required — the same trio scripts/rq uses):
+#   SUPABASE_URL        https://<project-ref>.supabase.co
+#   SUPABASE_ANON_KEY   the anon / publishable key (client-public)
+#   CLAUDE_RQ_KEY       matches Vault secret claude_rq_key
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+if [ $# -ne 2 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+fi
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/03-agent-access.md"
+done
+
+friend_name="$1"
+chat_key="$2"
+printf '%s' "$chat_key" | grep -Eq '^[A-Za-z0-9_-]{8,100}$' || die "malformed chat key"
+
+body=$(jq -n --arg name "$friend_name" --arg k "$chat_key" \
+    '{name: $name, kind: "poke", chat_key: $k}')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/functions/v1/following-relay" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi

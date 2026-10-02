@@ -66,9 +66,14 @@ Failure is designed to be visible, never silent: no Vault credential →
 runs sit `queued`; webhook lost → re-fired up to 3 times, then `failed`
 with a reason; session died → `failed` after 2 hours.
 
-Two paths skip the tick entirely, both queue-and-fire-inline with the
+Three paths skip the tick entirely, all queue-and-fire-inline with the
 same Vault credential: the chute's **Sort now** (`sort_chute_now()`),
-and the Syla thread's send. **send to Syla** calls `send_to_syla()`
+the Syla thread's send, and a connection's **chat poke**
+(`follower_poke_chat()` — a connected peer's client, or their Syla
+through the relay's `poke` kind, knocks after posting in a shared chat;
+the queued run's claim entry carries a `poke` field naming the chat,
+and Syla reads the thread and acts by the reply ladder —
+`notes/11-connections-and-reply-rules.md`). **send to Syla** calls `send_to_syla()`
 (owner-only, SECURITY DEFINER), which writes the owner's message into
 the Syla conversation (`chats.kind='syla'`) linked to a queued run
 with NO event (`syla_job_runs.event_id` null — the message is the
