@@ -33,6 +33,7 @@
 // grants nothing without a fresh, PKCE-bound code.
 
 const TOKEN_URL = "https://api.supabase.com/v1/oauth/token";
+const MGMT_API = "https://api.supabase.com";
 const APP_SCHEME = "sylos://supabase-oauth";
 // Where a web flow lands after consent, by state prefix. WEB_CALLBACK_URL
 // and SETUP_CALLBACK_URL override the production addresses (a preview
@@ -47,6 +48,16 @@ const CORS_HEADERS = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "POST, OPTIONS",
   "access-control-allow-headers": "content-type",
+  "access-control-max-age": "86400",
+};
+
+// The /mgmt passthrough answers every method the Management API takes,
+// and the browser client reads retry-after off 429s.
+const MGMT_CORS_HEADERS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+  "access-control-allow-headers": "authorization, content-type",
+  "access-control-expose-headers": "retry-after",
   "access-control-max-age": "86400",
 };
 
@@ -102,6 +113,50 @@ Deno.serve(async (req) => {
     return new Response(null, {
       status: 302,
       headers: { location: `${webReturn ?? APP_SCHEME}?${forward}` },
+    });
+  }
+
+  // /mgmt/v1/… — the Management API passthrough for the browser flows.
+  // api.supabase.com's own CORS allowlist reflects only Supabase's
+  // origins, so getsylos.com can't call it directly; this route forwards
+  // the call verbatim — the caller's bearer token, path, query and body —
+  // and relays the answer with CORS open. The relay adds no credential of
+  // its own here: without the caller's valid Management API token,
+  // upstream answers 401, so possession of this URL still grants nothing.
+  const reqUrl = new URL(req.url);
+  const mgmtAt = reqUrl.pathname.indexOf("/mgmt/");
+  if (mgmtAt !== -1) {
+    if (req.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: MGMT_CORS_HEADERS });
+    }
+    const subpath = reqUrl.pathname.slice(mgmtAt + "/mgmt".length);
+    if (!subpath.startsWith("/v1/")) {
+      return new Response(JSON.stringify({ error: "only /v1 paths are relayed" }), {
+        status: 404,
+        headers: { "content-type": "application/json", ...MGMT_CORS_HEADERS },
+      });
+    }
+    const headers: Record<string, string> = {};
+    const auth = req.headers.get("authorization");
+    if (auth) headers.authorization = auth;
+    const contentType = req.headers.get("content-type");
+    if (contentType) headers["content-type"] = contentType;
+    const body = req.method === "GET" || req.method === "HEAD" ? undefined : await req.arrayBuffer();
+    const upstream = await fetch(`${MGMT_API}${subpath}${reqUrl.search}`, {
+      method: req.method,
+      headers,
+      body,
+    });
+    const respHeaders: Record<string, string> = { ...MGMT_CORS_HEADERS };
+    const upstreamType = upstream.headers.get("content-type");
+    if (upstreamType) respHeaders["content-type"] = upstreamType;
+    const retryAfter = upstream.headers.get("retry-after");
+    if (retryAfter) respHeaders["retry-after"] = retryAfter;
+    const payload = await upstream.arrayBuffer();
+    // 204/304 must carry no body, or the Response constructor throws.
+    return new Response(upstream.status === 204 || upstream.status === 304 ? null : payload, {
+      status: upstream.status,
+      headers: respHeaders,
     });
   }
 
