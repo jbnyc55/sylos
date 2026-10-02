@@ -106,8 +106,16 @@ conversation has no host anywhere (`20261116000000_personal_chat.sql`):
   is deliberately its own future feature.
 - **A group is a roster, locally copied.** Whoever assembles it mints
   the `chat_key` and names the followers; each follower's client mirrors
-  the row into their own project and names the others back. Every
-  follower holds their own copy of who is in the chat.
+  the row into their own project and names the others back — as far as
+  it can identify them: a follower reads only the chats naming them,
+  never the rest of the roster, so a mirrored copy names the people its
+  owner already knows. A group's name is each side's own `chats.title`
+  — renaming is one local update, visible only to you. Syla works in
+  groups per person, never per group: an auto-reply answers one
+  person's message under that person's active rule
+  (`20261212000000_group_chats.sql`), and reply rules themselves never
+  grow a group scope — the app's group screens only ever edit several
+  individual lists at once.
 - **The company project keeps no chat index, no bodies, no social
   graph.** Its one chat duty is a stateless push hop: "wake this
   device", stored nowhere (the developer's `push-relay`). Who you

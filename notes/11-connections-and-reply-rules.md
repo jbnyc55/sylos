@@ -80,11 +80,23 @@ blue dot, `chats.waiting_on_human`, via `set_chat_waiting`).
   chat stays waiting on you.
 
 The database's gate is structural, the sentence-reading is procedure:
-`send_auto_reply` proves the chat is a dm whose single counterparty's
-mode allows sending and that the cited rule is theirs, active, verdict
-REPLY — whether the sentence truly covered the message is Syla's
-preflight (`skills/chat-replies`), attributable after the fact because
-every auto-reply carries `rule_id` and every edit is in `row_edits`.
+`send_auto_reply` proves the chat is a dm or group, that the cited
+rule's own person is named on it, and that that person's mode allows
+sending (`20261212000000_group_chats.sql`) — whether the sentence truly
+covered the message is Syla's preflight (`skills/chat-replies`),
+attributable after the fact because every auto-reply carries `rule_id`
+and every edit is in `row_edits`.
+
+## Groups change nothing about rules
+
+There are no group rules. In a group chat Syla answers one person's
+message under that person's active rule, exactly as in a dm — the whole
+roster reads the reply, but the authorization is one connection's mode
+and one connection's list. What the app's group screens add is purely
+convenience: a suggestion can offer the same sentence onto several
+members' lists at once, and the chat's details page gathers the members
+so each one's list is a tap away. Every write those screens make is an
+ordinary per-person `reply_rules` write.
 
 ## Receiving the other side
 
