@@ -66,9 +66,14 @@ Failure is designed to be visible, never silent: no Vault credential →
 runs sit `queued`; webhook lost → re-fired up to 3 times, then `failed`
 with a reason; session died → `failed` after 2 hours.
 
-Three paths skip the tick entirely, all queue-and-fire-inline with the
+Four paths skip the tick entirely, all queue-and-fire-inline with the
 same Vault credential: the chute's **Sort now** (`sort_chute_now()`),
-the Syla thread's send, and a connection's **chat poke**
+the Syla thread's send, a flagged proposal's **edit feedback**
+(`proposal_feedback_wakes_syla()` — the owner marking an agent edit
+proposal `changes_requested` queues a run of the pre-latched Edit
+feedback event, so the revision happens now instead of on a daily
+cron; flips coalesce onto a still-queued run), and a connection's
+**chat poke**
 (`follower_poke_chat()` — a connected peer's client, or their Syla
 through the relay's `poke` kind, knocks after posting in a shared chat;
 the queued run's claim entry carries a `poke` field naming the chat,
@@ -128,11 +133,16 @@ only.
 
 ## The docs are the instructions
 
-The starter seeds five Syla events the moment the owner's account is
-crowned, each attached to its doc: `syla/note-siloing`,
-`syla/edit-feedback`, `syla/goal-synergy`, `syla/daily-summary`,
-`syla/chute-sort` (the Chute sort — dispatched by the chute branch, not
-the due-scan). Edit a
-doc in the app (or via `scripts/doc-save`) and the event behaves
+The starter seeds two Syla events the moment the owner's account is
+crowned, each attached to its doc and each pre-latched forever, so the
+generic due-scan serves only events the owner puts on the calendar
+themself: the **Chute sort** (`syla/chute-sort`, dispatched by the
+chute branch) and **Edit feedback** (`syla/edit-feedback`, dispatched
+by the proposal-feedback trigger). The other instruction docs the
+starter ships — `syla/note-siloing`, `syla/goal-synergy`,
+`syla/daily-summary` — have no seeded event anymore: they fired daily
+sessions that had nothing to do on a young install, so they wait as
+docs until the owner puts an event on the calendar that attaches one.
+Edit a doc in the app (or via `scripts/doc-save`) and the event behaves
 differently on its next run; every edit is in `row_edits`, so a bad
 instruction change is one restore away.
