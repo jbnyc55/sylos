@@ -1,35 +1,35 @@
-# Apps and chat
+# Minis and chat
 
-A Sylos install is a personal Supabase project that hosts apps. The
-apps are vibe code apps — whole client-side apps, each built into one
-self-contained HTML file, stored as a row in `vibe_code_apps`, served
+A Sylos install is a personal Supabase project that hosts minis. A
+MINI is a whole client-side app, built into one self-contained HTML
+file, stored as a row in `minis`, served
 straight over PostgREST and run in an iframe with the owner's session
 handed in by postMessage (migrations `20261008000000`,
 `20261030000000`, `20261115000000`). What is new is the shape of the
-product around them: **the client is a home screen of separate apps**,
+product around them: **the client is a home screen of minis**,
 and two rules that bind everything below.
 
 ## The two rules
 
-**Every app has the same format: code + manifest + icon.** The code is
-the bundle (`html`) and its source tree (`vibe_code_app_files`), both
-rows in the owner's database — the database is where app code lives.
-The manifest (`sylos-manifest.json`) declares what the app needs,
+**Every mini has the same format: code + manifest + icon.** The code is
+the bundle (`html`) and its source tree (`mini_files`), both
+rows in the owner's database — the database is where mini code lives.
+The manifest (`sylos-manifest.json`) declares what the mini needs,
 never SQL to run. The icon (`icon` on the row, `20261115000000`) is an
 emoji or one inline `<svg>`, rendered by shells as an image — never a
 script context — so the home screen can show anyone's icon safely. No
-app is special: chat, todos, a friend's rent tracker — same three
-pieces, same deploy (`scripts/vibe-save … --icon`), same undo log.
+mini is special: chat, todos, a friend's rent tracker — same three
+pieces, same deploy (`scripts/mini-save … --icon`), same undo log.
 
-**Apps are never served between databases; every source of truth is
-local.** An app someone's silo shares with you is a thing to *rebuild
+**Minis are never served between databases; every source of truth is
+local.** A mini someone's silo shares with you is a thing to *rebuild
 for yourself*, not to run from their project: its bundle is read once
 over your follower key, landed in **your** database, and is local
 source of truth from then on — running under your session, surviving
 their project pausing, yours to edit. The quick path is a verbatim
-copy (the client's Copy button; take apps from people you trust); the
+copy (the client's Copy button; take minis from people you trust); the
 careful path is Syla's install flow — audit the bundle, re-derive the
-tables from the manifest, deploy fresh (`skills/vibe-apps`). Either
+tables from the manifest, deploy fresh (`skills/minis`). Either
 way there is no remote runner, no "open from their shelf", and no
 special context posted into anyone's frame. This retired the one
 exception the chat app used to enjoy.
@@ -37,19 +37,19 @@ exception the chat app used to enjoy.
 ## The home screen
 
 Logging in lands on a home screen in Chat's design language — a grid
-of apps, icon over name, the way a phone's home screen works. The old
-five-tab app is gone, split into its parts, each a separate app:
+of minis, icon over name, the way a phone's home screen works. The old
+five-tab app is gone, split into its parts, each a separate mini:
 **Chat**, **Notes**, **Docs**, **Todos**, **Goals** (opened from
-Todos), **Calendar**, **Silos**, **Syla** — plus every vibe in the
+Todos), **Calendar**, **Silos**, **Syla** — plus every mini in the
 owner's database. The stock set is rendered by the shell today and
-ships as real vibes over time; because icon and format travel with the
-row, the cutover per app is just a deploy. `profiles.default_app`
+ships as real minis over time; because icon and format travel with the
+row, the cutover per mini is just a deploy. `profiles.default_app`
 still names the app the client boots straight into (`home` is the
 home screen, and the default).
 
 Two doors into the grid, both on the dashed **New** tile:
 
-- **Vibe code it** — describe the app; the ask goes to Syla
+- **Vibe code it** — describe the mini; the ask goes to Syla
   (`send_to_syla`), and she writes the code, manifest and icon
   straight into your storage through the same gated deploy as always.
 - **Copy one shared with you** — the "From silos you follow" shelf,
@@ -94,7 +94,7 @@ conversation has no host anywhere (`20261116000000_personal_chat.sql`):
   "signed as Syla" and the two chips), `ask_human` (the travelling
   ask-for-the-human flag — the receiving client marks its chat
   `waiting_on_human`, the blue dot), `syla_status` (Syla's own lines in
-  the Syla chat), `app_share` (this side shared a vibe code app —
+  the Syla chat), `mini_share` (this side shared a mini —
   below). No drafts, rules or conclusions ever travel — those
   stay local (`notes/11-connections-and-reply-rules.md`).
 - **An attachment is a reference; delivery is a signed URL, minted
@@ -185,28 +185,28 @@ single-use code, and the recipient claims it in one tap
 transport; the machinery is this starter's, unchanged
 (`notes/05-followers.md`).
 
-## Sharing an app is a message
+## Sharing a mini is a message
 
-A two-player app (the first-run race, a household map) needs three
-things at once: the connection, the app on both sides, and the data
+A two-player mini (the first-run race, a household map) needs three
+things at once: the connection, the mini on both sides, and the data
 grants in both directions. One gesture per person covers it
 (`20261226000000_app_share_messages.sql`):
 
 - **The sender shares from the chat.** The share sheet does four
   owner-session writes in the sender's own database: name the
-  connection on the app (`vibe_code_app_followers` — what lets the
+  connection on the mini (`mini_followers` — what lets the
   card's reads and the copy pass RLS), grant the sender's own side of
-  the data (the silo the app's `sylos-manifest.json` names gets the
-  connection's follow, with the app's tables in it — stated plainly on
-  the sheet), insert the `kind = 'app_share'` message carrying the
-  app's slug, and poke (`follower_poke_chat`) when the connection is
-  already claimed. Syla builds apps; **sharing one is a grant, and
+  the data (the silo the mini's `sylos-manifest.json` names gets the
+  connection's follow, with the mini's tables in it — stated plainly on
+  the sheet), insert the `kind = 'mini_share'` message carrying the
+  mini's slug, and poke (`follower_poke_chat`) when the connection is
+  already claimed. Syla builds minis; **sharing one is a grant, and
   grants are the owner's alone** — she has no write path into any of
-  this, and her column-scoped message insert excludes `app_slug`.
-- **The receiver accepts from the card.** Their client reads the app's
+  this, and her column-scoped message insert excludes `mini_slug`.
+- **The receiver accepts from the card.** Their client reads the mini's
   name, icon and manifest over their follower key, and one accept does
   their whole side, all local owner-session writes: copy the bundle
-  into their own `vibe_code_apps` (apps are never served between
+  into their own `minis` (minis are never served between
   databases — the copy pins the code they accepted) and grant back the
   silo the manifest names. Remixing their copy later is what makes it
   properly theirs; an un-remixed copy can take the sender's updates on
@@ -221,7 +221,7 @@ grants in both directions. One gesture per person covers it
 
 The asks-for-more path is unchanged: an existing follower who wants
 into a silo still knocks through `follower_request_silo`
-(`notes/05-followers.md`); the app-share card is the offer direction,
+(`notes/05-followers.md`); the mini-share card is the offer direction,
 and it crosses no boundary at all.
 
 ## Your chat, your Syla
@@ -244,8 +244,8 @@ hand. My Syla watching a chat says nothing about yours.
   the client switches, and prunable.
 - **The stateless push hop** — the trigger that asks the developer's
   relay to wake a peer's device, storing nothing.
-- **Stock apps as deployed vibes.** The split apps render in the shell
-  until each is built into a single file and deployed; the home screen
-  doesn't change when they do.
-- **Copy counts and provenance** on shared apps ("copied 12×"), and a
+- **Stock minis as deployed bundles.** The stock set renders in the
+  shell until each is built into a single file and deployed; the home
+  screen doesn't change when they do.
+- **Copy counts and provenance** on shared minis ("copied 12×"), and a
   guided Syla-rebuild button next to the verbatim Copy.

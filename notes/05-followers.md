@@ -104,7 +104,7 @@ on it from the app: approving means inserting the `silo_followers` row
 there (stamping the silo's defaults, per-person overrides after), the
 queue only records the ask and the ruling. Capped at five pending per
 follower, one open ask per silo. This is also how a vibe app's followers ask
-into the silo its manifest names (`skills/vibe-apps`).
+into the silo its manifest names (`skills/minis`).
 
 Strangers can't knock: someone who is not yet a follower reaches you
 out-of-band, and the first hello is human — you mint the invite.
@@ -120,7 +120,7 @@ fan out —
 
 - **Vibe apps** running under your session read `following` and query each
   friend's `follower_rq` directly (a location app plots the household this
-  way — `skills/vibe-apps`).
+  way — `skills/minis`).
 - **Syla** does the same through `scripts/following-rq` — via her own
   project's `following-relay` edge function, which looks the credentials
   up and makes the call, so her sessions need no network allowance per
@@ -130,7 +130,7 @@ fan out —
   no other transport exists. A shared chat attachment comes home the
   same way: `scripts/following-file` (relay kind `file`) asks the
   friend's `follower-file` for the signed URL and relays the bytes
-  (`notes/10-apps-and-chat.md`).
+  (`notes/10-minis-and-chat.md`).
 
 Reciprocity is still two independent grants underneath — each owner
 only ever approves rows in their own database, and asymmetric trust
@@ -150,7 +150,7 @@ send the other way is a proposal into their inbox
 ## Every table is siloed or unsiloed
 
 Six record types are placed row by row — notes, docs, todos, goal cells,
-events and vibe code apps each have their own `*_silos` / `*_followers`
+events and minis each have their own `*_silos` / `*_followers`
 junctions and a by-hand siloed mark. Every *other* table in `public` is
 placed **as a whole**, and no table is allowed to sit outside the
 vocabulary (`20261101000000_every_table_siloed.sql`):
