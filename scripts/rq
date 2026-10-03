@@ -23,13 +23,18 @@
 #   SUPABASE_URL        https://<project-ref>.supabase.co
 #   SUPABASE_ANON_KEY   the anon / publishable key (client-public)
 #   CLAUDE_RQ_KEY       matches Vault secret claude_rq_key
+#
+# Optional: SYLA_RUN_ID — the claimed run being worked. When set, every
+# query also narrates itself onto that run's live status line
+# (set_syla_run_status), which the Syla thread shows in place of
+# "Syla's reading…". Best effort, backgrounded, never fails the query.
 
 set -euo pipefail
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
 if [ $# -lt 1 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
-    sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'
+    sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//'
     exit 1
 fi
 
@@ -42,6 +47,82 @@ if [ "$1" = "-" ]; then q=$(cat); else q="$*"; fi
 # Be forgiving about one trailing semicolon; the server rejects it otherwise.
 q="$(printf '%s' "$q" | sed -e 's/[[:space:];]*$//')"
 [ -n "$q" ] || die "empty query"
+
+# ---- Live status (opt-in via SYLA_RUN_ID) ---------------------------------
+# A deterministic translation of the query into a Syla-voiced one-liner.
+# Pure string matching on purpose: no extra model call (latency/cost),
+# nothing hallucinated, and the raw SQL itself is never shown — the only
+# query-derived fragment is an ilike search term, visible only to the
+# owner whose database (and whose message) this is. The first FROM in the
+# statement names the table; inside a CTE that's the innermost real table,
+# which is a better label than the CTE's name anyway.
+status_for() {
+    local flat lower table base term
+    flat=$(printf '%s' "$1" | tr '\n\t' '  ')
+    lower=$(printf '%s' "$flat" | tr '[:upper:]' '[:lower:]')
+    table=$(printf '%s' "$lower" \
+        | grep -oE 'from +(public\.)?"?[a-z0-9_]+' | head -n1 \
+        | sed -E 's/^from +//; s/^public\.//; s/^"//' || true)
+    case "$table" in
+        docs|doc_folders|doc_syla)                      base='Reading up in your docs' ;;
+        notes|manual_notes|note_uploads|note_types)     base='Going through your notes' ;;
+        chats|chat_messages|chat_members|chat_pokes)    base='Reading the conversation' ;;
+        events|event_docs|event_exclusion|event_goals|apple_event|gcal_event)
+                                                        base='Checking the calendar' ;;
+        todo|todo_done|todo_group|todo_docs|todo_goals|apple_reminder)
+                                                        base='Looking over the to-dos' ;;
+        chute_items|chute_settings)                     base='Digging through the Chute' ;;
+        followers|follower_claims|peers)                base='Checking your connections' ;;
+        silo_rules|silo_asks|silo_ask_candidates|*_silos) base='Reviewing your silos' ;;
+        syla_approvals|*_proposals)                     base='Checking what needs your sign-off' ;;
+        reply_rules)                                    base='Checking the reply rules' ;;
+        uploads)                                        base='Opening the attachment' ;;
+        vibe_code_app*)                                 base='Peeking at your apps' ;;
+        day_summary)                                    base='Rereading the day summary' ;;
+        row_edits|agent_edits)                          base='Reviewing recent changes' ;;
+        syla_jobs|syla_job_runs)                        base='Checking my own task list' ;;
+        goals)                                          base='Looking at your goals' ;;
+        mind_map_cells|cell_members|goal_cell_links)    base='Tracing the mind map' ;;
+        health_samples|workouts|weight_lifts|food_log_entry|streak_marks)
+                                                        base='Going through your health logs' ;;
+        money_entry|card_purchase|plaid_item)           base='Going over the money logs' ;;
+        wiki_pages|wiki_page_types)                     base='Flipping through the wiki' ;;
+        data_tables|user_table_proposals)               base='Scanning your tables' ;;
+        guests|guest_*)                                 base='Checking guest access' ;;
+        '') case "$lower" in *'count('*) base='Crunching some numbers' ;;
+                            *)           base='Digging through the database' ;; esac ;;
+        *)  base="Checking ${table//_/ }" ;;
+    esac
+    if [ -n "$table" ]; then
+        # "Counting" reads badly after some phrases ("Counting reading the
+        # conversation") — counting keeps the plain table noun instead.
+        case "$lower" in
+            *'count('*) base="Crunching the numbers on ${table//_/ }" ;;
+        esac
+        # Upcoming-events scans deserve their own line.
+        if [ "$table" = 'events' ] && printf '%s' "$lower" | grep -qE 'start_date *>='; then
+            base='Scoping what is coming up'
+        fi
+    fi
+    term=$(printf '%s' "$flat" \
+        | grep -oiE "ilike +'%?[^%']{1,40}%?'" | head -n1 \
+        | sed -E "s/^[iI][lL][iI][kK][eE] +'%?//; s/%?'\$//" \
+        | tr -d '\000-\037' || true)
+    [ -n "$term" ] && base="$base matching “$term”"
+    printf '%s…' "$base"
+}
+
+if [ -n "${SYLA_RUN_ID:-}" ]; then
+    note=$(status_for "$q")
+    nbody=$(jq -n --arg run "$SYLA_RUN_ID" --arg note "$note" \
+        '{_run_id: $run, _note: $note}')
+    { curl -sS -m 5 \
+        -X POST "${SUPABASE_URL%/}/rest/v1/rpc/set_syla_run_status" \
+        -H "apikey: ${SUPABASE_ANON_KEY}" \
+        -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+        -H "content-type: application/json" \
+        --data "$nbody" >/dev/null 2>&1 || true; } &
+fi
 
 body=$(jq -n --arg q "$q" '{q: $q}')
 

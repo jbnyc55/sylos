@@ -54,7 +54,16 @@ generic on purpose; the work is in the queue:
    the work. Log nothing.
 3. List your skills (`skills/%` docs, query above) and load the ones the
    claimed events call for.
-4. For each claimed run, in order: the event is the instructions — its
+4. For each claimed run, in order. First `export SYLA_RUN_ID=<run_id>`
+   — every `scripts/rq` query then stamps a live one-liner on the run
+   ("Checking the calendar…"), which the owner watches under their
+   message in place of "Syla's reading…". At moments rq cannot see,
+   set the line yourself: `scripts/syla-status --note "Thinking it
+   over…"` (likewise "Writing your reply…" just before chat-say).
+   Narration, never the record — the run still ends only through
+   syla-finish. Re-export when you move to the next run.
+
+   The event is the instructions — its
    title, its child todos, and above all its attached docs. Read each
    doc and follow it exactly:
 

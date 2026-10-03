@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+#
+# syla-status — set the live status line on a running Syla run, over HTTPS.
+#
+# Calls the set_syla_run_status RPC, which switches to the `claude` role
+# and stamps status_note on one 'running' syla_job_runs row — the Syla
+# thread shows it under the owner's message in place of "Syla's reading…".
+# Narration, not a record: use it at milestones scripts/rq cannot see
+# ("Thinking it over…", "Writing your reply…"). Best effort by design —
+# a run that already finished answers noted=false, never an error.
+#
+# Usage:
+#   scripts/syla-status --note "<one line>" [--run <run-uuid>]
+#
+# Flags: --note required (120 chars at most; empty clears the note).
+# --run defaults to $SYLA_RUN_ID, the run exported while working a claim.
+#
+# Environment (all required; see notes/03-agent-access.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+run="${SYLA_RUN_ID:-}" note=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --run)  run="${2:?}"; shift 2 ;;
+        --note) note="${2?}"; shift 2 ;;
+        -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+[ -n "$run" ] || die "--run is required (or export SYLA_RUN_ID)"
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/03-agent-access.md"
+done
+
+body=$(jq -n --arg run "$run" --arg note "$note" '{_run_id: $run, _note: $note}')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/set_syla_run_status" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi

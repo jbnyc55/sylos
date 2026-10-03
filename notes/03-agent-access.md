@@ -10,7 +10,7 @@ A dedicated Postgres role, `claude`:
 | | |
 | --- | --- |
 | **Read** | Every table in `public`, including ones added by later migrations — with a few deliberate exceptions (e.g. OAuth token tables) |
-| **Write** | Narrow, structured paths only: `agent_edits` (insert-only self-reporting); `day_summary` upserts; note silo placement and splits; `docs` in full — insert, update *and* delete — every change captured by trigger in the write-protected `row_edits` log; proposal-queue inserts and feedback-flagged revisions; auto-approve rule *requests*; Syla run claims and finishes |
+| **Write** | Narrow, structured paths only: `agent_edits` (insert-only self-reporting); `day_summary` upserts; note silo placement and splits; `docs` in full — insert, update *and* delete — every change captured by trigger in the write-protected `row_edits` log; proposal-queue inserts and feedback-flagged revisions; auto-approve rule *requests*; Syla run claims, finishes and live status notes |
 | **Cannot** | Write any other table or column, update or delete its own log rows, read the `auth` schema, create or drop anything, or switch to another role |
 
 The asymmetry is the point: reads are broad so the agent can answer
@@ -73,6 +73,7 @@ arguments, never SQL, and is idempotent where re-running matters:
 | `scripts/link-goal-cells` | Annotate same-concept goal cells as a synergy group |
 | `scripts/log-lift` | Append weight-lift rows parsed from notes |
 | `scripts/syla-claim`, `syla-finish`, `syla-set-webhook` | The job queue — see [`04-syla-jobs.md`](04-syla-jobs.md) |
+| `scripts/syla-status` | The live status line on a running run (`syla_job_runs.status_note`) — the Syla thread's "what she's doing right now"; `scripts/rq` stamps it automatically per query when `SYLA_RUN_ID` is exported |
 | `scripts/chat-say`, `chat-propose`, `chat-auto-reply`, `chat-waiting`, `suggest-reply-rule` | The chat surface: the receipt into the Syla conversation, reply drafts, rule-covered auto-replies, the blue dot, and reply-rule suggestions — the `skills/chat-replies` doc is the semantic preflight |
 | `scripts/file-url` | A read, not a write: a short-lived signed link for an `uploads` row (the claude-file edge function; rq is SQL and cannot carry bytes), so Syla can look at a dropped photo or document before filing it |
 | `scripts/following-file` | Also a read: a shared chat attachment fetched from a friend's database — the following-relay's `file` kind asks their `follower-file` for the signed URL and relays the bytes home (`notes/10-apps-and-chat.md`) |
