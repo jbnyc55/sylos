@@ -37,18 +37,22 @@ their database. Nothing here changes what crosses the boundary.
 `followers.syla_reply_mode`, per connection — how *your* Syla may answer
 *this person* in chat:
 
-1. **propose** (the default) — she only drafts. A draft is a pending
+1. **off** — she stays out of the chat entirely: no drafts, no
+   auto-replies, no suggestions, no waiting flags. A plain
+   conversation.
+2. **propose** (the default) — she only drafts. A draft is a pending
    `chat_reply_proposals` card in the thread; approving it sends **as
    you** (your session inserts the message, author `'me'`).
-2. **auto** — she may send where an **active reply rule** covers the
+3. **auto** — she may send where an **active reply rule** covers the
    message, through `send_auto_reply`, always attributed (the peer
    renders "signed as Syla", `chat_messages.kind = 'auto_reply'`).
-3. **syla_syla** — auto, plus the two agents may talk. Needs both
-   sides: your mode set to it *and* `syla_syla_peer_ok`, which is
-   learned from an attributed message in the chat — never from reading
-   their database. Syla × Syla is 1:1, and its overnight conclusions
-   are Inbox cards (`syla_approvals` kind `conclusion`), not applied
-   facts.
+
+A fourth rung, `syla_syla`, retired in 20261215000000: it was both
+sides on auto in practice — the agents already talk wherever each
+side's rules allow a send. Existing rows stepped down to `auto`;
+`syla_syla_peer_ok` stays as a dormant column. Two agents' overnight
+conclusions remain Inbox cards (`syla_approvals` kind `conclusion`),
+not applied facts.
 
 There is no "turn on auto-reply" toggle: **rules accumulate from
 approvals**. After you approve a draft, the same card advances to offer

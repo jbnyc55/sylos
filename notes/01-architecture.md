@@ -44,10 +44,10 @@ client is bound by the same rules.
   surface — nothing Syla agrees to is final until approved there.
 
 **The distributed-chat rule** binds every cross-person feature: it is an
-*attributed message on the sender's side*. Drafts, reply rules and
-Syla × Syla conclusions stay local; what travels is a message with a
-kind (`auto_reply`, `ask_human`); there is no shared mutable chat state
-anywhere, and Syla × Syla is 1:1.
+*attributed message on the sender's side*. Drafts, reply rules and the
+agents' conclusions stay local; what travels is a message with a kind
+(`auto_reply`, `ask_human`); there is no shared mutable chat state
+anywhere, and agent-to-agent chat is 1:1.
 
 ## Runtime data flow
 

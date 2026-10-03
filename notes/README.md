@@ -19,7 +19,7 @@ password, or key checked into this repo, rotate it immediately.
 | [`08-provisioning.md`](08-provisioning.md) | Provisioning: the web setup tab builds the project over the Management API, then the iPhone — holder of the management credential — becomes the standing migration and function runner. |
 | [`09-hosted-trial.md`](09-hosted-trial.md) | *(historical)* The hosted trial — removed by the chat-first rebuild (own Claude only); kept as the record of the design and its one schema knob. |
 | [`10-apps-and-chat.md`](10-apps-and-chat.md) | Apps and chat: every app a vibe in your own database, chat personal all the way down (your words in your project, a DM a mutual follow), message authors and kinds, and Syla as a conversation with real receipts. |
-| [`11-connections-and-reply-rules.md`](11-connections-and-reply-rules.md) | Connections: one lifecycle over the directional machinery, the reply ladder (propose → auto → Syla × Syla), reply rules as the per-person preflight, and one-sided visibility. |
+| [`11-connections-and-reply-rules.md`](11-connections-and-reply-rules.md) | Connections: one lifecycle over the directional machinery, the reply ladder (off → propose → auto), reply rules as the per-person preflight, and one-sided visibility. |
 | [`12-chute.md`](12-chute.md) | The chute: capture with no filing decision, Syla's scheduled sort, undo as row_edits, ambiguity as Inbox questions. |
 
 ## The thirty-second version
