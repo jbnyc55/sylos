@@ -55,7 +55,11 @@ conclusions remain Inbox cards (`syla_approvals` kind `conclusion`),
 not applied facts.
 
 There is no "turn on auto-reply" toggle: **rules accumulate from
-approvals**. After you approve a draft, the same card advances to offer
+approvals**. The one exception is the **integration moment**: a message
+that needs data from a missing integration ("where are you?", no
+location) gets no half-draft — Syla files the needs-integration
+suggestion immediately instead, the card wears the connect flow, and
+connecting wakes her to answer with the real data. After you approve a draft, the same card advances to offer
 exactly one rule (`chat_reply_proposals.offered_rule_id` → the
 `suggested` row Syla filed with `suggest_reply_rule`); a second
 suggestion comes only after a yes. The ladder sheet still exists to
