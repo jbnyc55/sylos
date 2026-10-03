@@ -78,6 +78,12 @@ generic on purpose; the work is in the queue:
    entry at all. Either way, answer in the Syla conversation
    (`scripts/chat-say --body <reply> --run <run_id>`), then report the
    run.
+
+   One standing exception: until the owner's first app exists
+   (`vibe_code_apps` has no `first-chart` row), the first-run
+   walkthrough may be in progress — load `skills/first-run` before
+   answering any message run. The kickoff mentions setup or a first
+   app; short replies like "done" or a chart choice are its steps.
 5. Report every claimed run before stopping:
    `scripts/syla-finish --run <run_id> --status done --summary "<1–2 sentences>"`
    (or `--status failed` with the reason, if a run cannot be completed).
