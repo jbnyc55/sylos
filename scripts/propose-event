@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+#
+# propose-event — file one calendar event as an approvable card, over
+# HTTPS.
+#
+# Calls the propose_approval RPC with kind 'calendar_add', which switches
+# to the `claude` role and inserts one pending syla_approvals card.
+# Nothing lands on the calendar here: the OWNER'S client inserts the
+# events row from the payload when they approve — in the Inbox, or right
+# inside the conversation the card is linked to (--chat), where it wears
+# Approve/Dismiss inline.
+#
+# Usage:
+#   scripts/propose-event --title "<event title>" --date YYYY-MM-DD \
+#       [--start HH:MM] [--end HH:MM] [--assignee me|syla] \
+#       [--freq daily|weekly|monthly|yearly] \
+#       [--detail "<why, short>"] [--chat <chat-uuid>]
+#
+# --assignee syla makes it YOUR event: the dispatcher queues you a run at
+# its start time, and the event's title is that run's instruction — write
+# it self-contained. The default, me, is an event the owner attends.
+# --freq makes it repeat (interval 1); omit it for a one-shot.
+#
+# Environment (all required; see notes/03-agent-access.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+title='' date='' start='' end='' assignee='' freq='' detail='' chat=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --title)    title="${2:?}";    shift 2 ;;
+        --date)     date="${2:?}";     shift 2 ;;
+        --start)    start="${2:?}";    shift 2 ;;
+        --end)      end="${2:?}";      shift 2 ;;
+        --assignee) assignee="${2:?}"; shift 2 ;;
+        --freq)     freq="${2:?}";     shift 2 ;;
+        --detail)   detail="${2:?}";   shift 2 ;;
+        --chat)     chat="${2:?}";     shift 2 ;;
+        -h|--help)  sed -n '2,24p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+[ -n "$title" ] && [ -n "$date" ] || die "--title and --date are required"
+case "$assignee" in ''|me|syla) ;; *) die "--assignee must be me or syla" ;; esac
+case "$freq" in ''|daily|weekly|monthly|yearly) ;; *) die "--freq must be daily, weekly, monthly or yearly" ;; esac
+printf '%s' "$date" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' \
+    || die "--date must be YYYY-MM-DD"
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/03-agent-access.md"
+done
+
+payload=$(jq -n --arg title "$title" --arg date "$date" --arg start "$start" \
+                --arg end "$end" --arg assignee "$assignee" --arg freq "$freq" '
+    {title: $title, start_date: $date}
+    + (if $start    != "" then {start_time: $start}  else {} end)
+    + (if $end      != "" then {end_time: $end}      else {} end)
+    + (if $assignee != "" then {assignee: $assignee} else {} end)
+    + (if $freq     != "" then {freq: $freq}         else {} end)')
+
+body=$(jq -n --arg title "$title" --arg detail "$detail" --arg chat "$chat" \
+             --argjson payload "$payload" '
+    {_kind: "calendar_add", _title: $title, _payload: $payload}
+    + (if $detail != "" then {_detail: $detail} else {} end)
+    + (if $chat != "" then {_chat_id: $chat} else {} end)')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/propose_approval" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi
