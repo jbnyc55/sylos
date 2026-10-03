@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+#
+# env-pack — print the one-paste agent environment for a new machine.
+#
+# Emits the three credential variables from the current environment plus
+# SYLOS_BOOTSTRAP: a prose variable that tells any agent, in one
+# paragraph, how to make its first call with the other three and to read
+# the skills/bootstrap doc next. The paste is self-sufficient — the
+# manual it points at lives inside the database the variables unlock, so
+# the new environment needs no repo, no notes, no prior context.
+#
+# Usage:
+#   scripts/env-pack                 # print the block
+#   scripts/env-pack > sylos.env     # then, on the new machine:
+#                                    #   source sylos.env
+#
+# The block is a full credential to this database: treat it like a
+# password. Prefer sourcing a file over pasting into a prompt, so it
+# stays out of shell history.
+#
+# Environment (all required; see notes/03-agent-access.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+fi
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/03-agent-access.md"
+done
+
+# Single-quote a value for shell, escaping embedded single quotes.
+sq() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+
+# The prose stays single-quoted on the new machine, so the $VAR
+# references inside it reach the agent literally — it substitutes its
+# own copies when it builds the call.
+bootstrap='This is a Sylos database; its agent manual lives inside it. The three env vars SUPABASE_URL, SUPABASE_ANON_KEY and CLAUDE_RQ_KEY are the whole credential. To read: POST $SUPABASE_URL/rest/v1/rpc/run_readonly_sql with headers "apikey: $SUPABASE_ANON_KEY" and "x-claude-rq-key: $CLAUDE_RQ_KEY" and JSON body {"q": "<one SELECT, no trailing semicolon>"}; the reply is a JSON array. FIRST fetch and follow the manual: {"q": "select html from docs where path = '"'"'skills/bootstrap'"'"'"}. For the ready-made scripts (rq, agent-write, propose-user-table and the rest): git clone https://github.com/jbnyc55/sylos and read notes/03-agent-access.md. Writes only ever go through the gated RPCs those scripts call; a refusal is an answer, not an obstacle.'
+
+printf '# Sylos agent environment — source this, then read $SYLOS_BOOTSTRAP.\n'
+printf '# Full credential to one database: handle like a password.\n'
+printf 'export SUPABASE_URL=%s\n'      "$(sq "$SUPABASE_URL")"
+printf 'export SUPABASE_ANON_KEY=%s\n' "$(sq "$SUPABASE_ANON_KEY")"
+printf 'export CLAUDE_RQ_KEY=%s\n'     "$(sq "$CLAUDE_RQ_KEY")"
+printf 'export SYLOS_BOOTSTRAP=%s\n'   "$(sq "$bootstrap")"

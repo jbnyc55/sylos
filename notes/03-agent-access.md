@@ -84,6 +84,27 @@ This is also the pattern for anything you add later: a new agent
 capability is a new structured script over a new gated RPC, with RLS and
 grants doing the enforcement.
 
+## One paste onto a new machine
+
+The trio is the whole credential, so moving the agent somewhere new — the
+owner's laptop for a big upload, a fresh environment with no repo and no
+notes — is one paste. `scripts/env-pack` prints it:
+
+```bash
+scripts/env-pack > sylos.env     # here
+source sylos.env                 # on the new machine
+```
+
+The block carries the three variables plus **`SYLOS_BOOTSTRAP`**, a prose
+variable an agent finds with `env | grep SYLOS`: one paragraph saying how
+to make the first `run_readonly_sql` call with the other three and to
+fetch the `skills/bootstrap` doc next. That doc — seeded by
+`20270103000000` — is the from-zero manual (transport contract, how to
+orient, where these scripts live, the write boundary), and it travels
+inside the database itself, so it cannot be lost while the keys work.
+Treat the block like a password: source a file, don't paste into a
+prompt that logs history.
+
 ## Revoking access
 
 Any one of these is sufficient:
