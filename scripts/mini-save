@@ -1,37 +1,37 @@
 #!/usr/bin/env bash
 #
-# vibe-save — create or replace one vibe code app, over HTTPS.
+# mini-save — create or replace one mini, over HTTPS.
 #
-# The vibes/ deploy: calls the save_vibe_code_app RPC, which switches to
-# the `claude` role and upserts the app by slug. The row_edits trigger
+# The minis/ deploy: calls the save_mini RPC, which switches to
+# the `claude` role and upserts the mini by slug. The row_edits trigger
 # captures the before/after images server-side, so every deploy is
 # undoable regardless of what this script does. Idempotent: re-saving an
 # identical bundle is an update that changes nothing but the log.
 #
 # Usage:
-#   scripts/vibe-save --slug <slug> --name <name> --html-file <file> \
+#   scripts/mini-save --slug <slug> --name <name> --html-file <file> \
 #       [--hint <hint>] [--icon <emoji-or-svg> | --icon-file <file>] \
 #       [--src-dir <dir>] [--open-to-signed-in | --owner-only]
-#   scripts/vibe-save --slug <slug> --name <name> --html-file -        # stdin
+#   scripts/mini-save --slug <slug> --name <name> --html-file -        # stdin
 #
-# --icon sets the app's home-screen icon: an emoji, or one inline <svg>
+# --icon sets the mini's home-screen icon: an emoji, or one inline <svg>
 # element (--icon-file for svg saved to disk). Omitting both keeps the
 # stored icon; --icon '' clears it.
 #
-# The html must be the vibes/ build's output: a complete self-contained
+# The html must be the mini build's output: a complete self-contained
 # document (leading <!doctype html>, everything inlined) — the database
 # refuses fragments and anything over 5 MB.
 #
-# --src-dir also uploads the app's SOURCE tree (every regular file under
-# the directory, paths relative to it) via save_vibe_code_app_files,
-# replacing the stored tree wholesale. The database is the app code's
-# home — editing an app later starts from these rows, not from git — so
+# --src-dir also uploads the mini's SOURCE tree (every regular file under
+# the directory, paths relative to it) via save_mini_files,
+# replacing the stored tree wholesale. The database is the mini code's
+# home — editing a mini later starts from these rows, not from git — so
 # passing the source dir on every deploy is the expected shape.
 #
-# --open-to-signed-in lets ANY signed-in session open the app (not just the
-# owner and its followers) via set_vibe_code_app_open; --owner-only takes
+# --open-to-signed-in lets ANY signed-in session open the mini (not just the
+# owner and its followers) via set_mini_open; --owner-only takes
 # that back. The flag is sticky — a plain redeploy leaves it as it was.
-# What an open app shows is still decided by its data tables' RLS.
+# What an open mini shows is still decided by its data tables' RLS.
 #
 # Environment (all required; see notes/07-agent-rq-https.md):
 #   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
@@ -112,13 +112,13 @@ rpc() {
     fi
 }
 
-rpc save_vibe_code_app "$tmpdir/body.json"
+rpc save_mini "$tmpdir/body.json"
 
 if [ -n "$src_dir" ]; then
     [ -d "$src_dir" ] || die "cannot read directory $src_dir"
     # Every regular file, path relative to the dir, content as text. The
     # database's path check refuses anything odd (node_modules never
-    # belongs in an app folder anyway).
+    # belongs in a mini folder anyway).
     (cd "$src_dir" && find . -type f | sed 's|^\./||' | sort) > "$tmpdir/paths"
     [ -s "$tmpdir/paths" ] || die "$src_dir contains no files"
     : > "$tmpdir/files.jsonl"
@@ -128,11 +128,11 @@ if [ -n "$src_dir" ]; then
     done < "$tmpdir/paths"
     jq -n --arg slug "$slug" --slurpfile files "$tmpdir/files.jsonl" \
         '{_slug: $slug, _files: $files}' > "$tmpdir/src.json"
-    rpc save_vibe_code_app_files "$tmpdir/src.json"
+    rpc save_mini_files "$tmpdir/src.json"
 fi
 
 if [ -n "$open" ]; then
     jq -n --arg slug "$slug" --argjson open "$open" \
         '{_slug: $slug, _open: $open}' > "$tmpdir/open.json"
-    rpc set_vibe_code_app_open "$tmpdir/open.json"
+    rpc set_mini_open "$tmpdir/open.json"
 fi

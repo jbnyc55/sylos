@@ -77,7 +77,7 @@ status_for() {
         syla_approvals|*_proposals)                     base='Checking what needs your sign-off' ;;
         reply_rules)                                    base='Checking the reply rules' ;;
         uploads)                                        base='Opening the attachment' ;;
-        vibe_code_app*)                                 base='Peeking at your apps' ;;
+        minis|mini_files|mini_followers)                 base='Peeking at your minis' ;;
         day_summary)                                    base='Rereading the day summary' ;;
         row_edits|agent_edits)                          base='Reviewing recent changes' ;;
         syla_jobs|syla_job_runs)                        base='Checking my own task list' ;;

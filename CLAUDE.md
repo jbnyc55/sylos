@@ -88,11 +88,11 @@ generic on purpose; the work is in the queue:
    (`scripts/chat-say --body <reply> --run <run_id>`), then report the
    run.
 
-   One standing exception: until the owner's first app exists
-   (`vibe_code_apps` has no `first-chart` row), the first-run
+   One standing exception: until the owner's first mini exists
+   (`minis` has no `first-chart` row), the first-run
    walkthrough may be in progress — load `skills/first-run` before
    answering any message run. The kickoff mentions setup or a first
-   app; short replies like "done" or a chart choice are its steps.
+   mini; short replies like "done" or a chart choice are its steps.
 5. Report every claimed run before stopping:
    `scripts/syla-finish --run <run_id> --status done --summary "<1–2 sentences>"`
    (or `--status failed` with the reason, if a run cannot be completed).
@@ -175,10 +175,10 @@ and `SUPABASE_ANON_KEY` (the company project) and `AGENT_POOL_KEY`.
    `{supabase_url, anon_key, rq_key}` from their install. That rq key
    is the claude role on THEIR database, exactly as this repo defines
    it (`notes/03-agent-access.md`): read with the `run_readonly_sql`
-   RPC, write ONLY through the gated RPCs — deploying a vibe is
-   `save_vibe_code_app(_slug, _name, _hint, _html)` and
-   `save_vibe_code_app_files`, opened to chat participants with
-   `set_vibe_code_app_open` — every call a POST to
+   RPC, write ONLY through the gated RPCs — deploying a mini is
+   `save_mini(_slug, _name, _hint, _html)` and
+   `save_mini_files`, opened to chat participants with
+   `set_mini_open` — every call a POST to
    `<own.supabase_url>/rest/v1/rpc/<fn>` with `apikey: <own.anon_key>`
    and `x-claude-rq-key: <own.rq_key>` headers. After deploying,
    card it into the chat AS THE USER (their Bearer token): insert the

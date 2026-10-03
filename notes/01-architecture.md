@@ -28,7 +28,7 @@ client is bound by the same rules.
 | Home**:
 
 - **Chats** — conversations with people (each a mutual follow, merged
-  from both sides' databases — `notes/10-apps-and-chat.md`) and the one
+  from both sides' databases — `notes/10-minis-and-chat.md`) and the one
   conversation with **Syla**, who is not a tab or an inbox but a chat
   (`chats.kind = 'syla'`, with real receipts — `notes/04-syla-jobs.md`).
   Per connection, a **reply ladder** says how your Syla may answer that
