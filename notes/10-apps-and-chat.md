@@ -94,7 +94,8 @@ conversation has no host anywhere (`20261116000000_personal_chat.sql`):
   "signed as Syla" and the two chips), `ask_human` (the travelling
   ask-for-the-human flag — the receiving client marks its chat
   `waiting_on_human`, the blue dot), `syla_status` (Syla's own lines in
-  the Syla chat). No drafts, rules or conclusions ever travel — those
+  the Syla chat), `app_share` (this side shared a vibe code app —
+  below). No drafts, rules or conclusions ever travel — those
   stay local (`notes/11-connections-and-reply-rules.md`).
 - **An attachment is a reference; delivery is a signed URL, minted
   per fetch** (`20261211000000_chat_attachments.sql`,
@@ -183,6 +184,45 @@ single-use code, and the recipient claims it in one tap
 (`claim_follower_invite` against your project). The chat is just the
 transport; the machinery is this starter's, unchanged
 (`notes/05-followers.md`).
+
+## Sharing an app is a message
+
+A two-player app (the first-run race, a household map) needs three
+things at once: the connection, the app on both sides, and the data
+grants in both directions. One gesture per person covers it
+(`20261226000000_app_share_messages.sql`):
+
+- **The sender shares from the chat.** The share sheet does four
+  owner-session writes in the sender's own database: name the
+  connection on the app (`vibe_code_app_followers` — what lets the
+  card's reads and the copy pass RLS), grant the sender's own side of
+  the data (the silo the app's `sylos-manifest.json` names gets the
+  connection's follow, with the app's tables in it — stated plainly on
+  the sheet), insert the `kind = 'app_share'` message carrying the
+  app's slug, and poke (`follower_poke_chat`) when the connection is
+  already claimed. Syla builds apps; **sharing one is a grant, and
+  grants are the owner's alone** — she has no write path into any of
+  this, and her column-scoped message insert excludes `app_slug`.
+- **The receiver accepts from the card.** Their client reads the app's
+  name, icon and manifest over their follower key, and one accept does
+  their whole side, all local owner-session writes: copy the bundle
+  into their own `vibe_code_apps` (apps are never served between
+  databases — the copy pins the code they accepted) and grant back the
+  silo the manifest names. Remixing their copy later is what makes it
+  properly theirs; an un-remixed copy can take the sender's updates on
+  its owner's say-so.
+- **It works before the claim.** The message is a row in the sender's
+  database, so the whole share can be staged while the invite is still
+  in flight: unreadable until the claim mints the key, delivered the
+  moment it does. Accepting an invite also queues a run for the
+  *inviter's* Syla (`20261227000000_claim_wakes_syla.sql` — the claim
+  entry's `claim` field), so "they're in" reaches the owner without
+  anyone polling.
+
+The asks-for-more path is unchanged: an existing follower who wants
+into a silo still knocks through `follower_request_silo`
+(`notes/05-followers.md`); the app-share card is the offer direction,
+and it crosses no boundary at all.
 
 ## Your chat, your Syla
 

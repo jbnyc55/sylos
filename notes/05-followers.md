@@ -67,7 +67,11 @@ trusts, and the payload itself is the proof
    a matching, unexpired, unblocked code is burned and buys their
    personal bearer token — shown once, stored only as a sha256 hash.
    Their follower row's `claimed_at` flips, so you see the accept (and can
-   block instantly if it wasn't them). When they have a database of
+   block instantly if it wasn't them). The claim also queues an
+   event-less `syla_job_runs` row and fires the routine webhook
+   (`20261227000000_claim_wakes_syla.sql`, logged in `follower_claims`),
+   so *your* Syla learns the connection landed — the claim entry's
+   `claim` field names who joined. When they have a database of
    their own, their app also attaches a **connect-back offer** to the
    claim (`20261213000000_connect_back.sql`): a single-use invite code
    it just minted in *their* database for you, stored on your follower
