@@ -123,7 +123,10 @@ fan out —
   friend and the token never reaches them — and reaches a
   friend's Syla by queueing a prompt in their database with
   `scripts/following-prompt` — the existing follower queues are the mailboxes;
-  no other transport exists.
+  no other transport exists. A shared chat attachment comes home the
+  same way: `scripts/following-file` (relay kind `file`) asks the
+  friend's `follower-file` for the signed URL and relays the bytes
+  (`notes/10-apps-and-chat.md`).
 
 Reciprocity is still two independent grants underneath — each owner
 only ever approves rows in their own database, and asymmetric trust

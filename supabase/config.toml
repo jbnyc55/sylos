@@ -79,6 +79,15 @@ verify_jwt = false
 [functions.claude-file]
 verify_jwt = false
 
+# The attachment delivery gate: a peer who can read a chat message that
+# carries a file fetches the file itself here, by short-lived signed URL
+# (POST /follower-file). verify_jwt is OFF because peers hold no user
+# JWT on this project; the gate is their follower bearer token in the
+# body, checked in SQL (follower_file_target), the same gate every
+# follower entry point has (see notes/10-apps-and-chat.md).
+[functions.follower-file]
+verify_jwt = false
+
 # The following relay: Syla reaches a friend's database through her own
 # project (POST /following-relay), so her sessions need no network
 # allowance per friend and the friend's token never leaves the vault's
