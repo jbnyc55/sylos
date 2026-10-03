@@ -96,14 +96,22 @@ conversation has no host anywhere (`20261116000000_personal_chat.sql`):
   `waiting_on_human`, the blue dot), `syla_status` (Syla's own lines in
   the Syla chat). No drafts, rules or conclusions ever travel — those
   stay local (`notes/11-connections-and-reply-rules.md`).
-- **An attachment is a reference, never a travelling file**
-  (`20261211000000_chat_attachments.sql`). A message may carry
+- **An attachment is a reference; delivery is a signed URL, minted
+  per fetch** (`20261211000000_chat_attachments.sql`,
+  `20261219000000_attachment_relay.sql`). A message may carry
   `upload_id` — a row in the sender's content-addressed `uploads`
   store, the same place the chute's drops land. The bytes stay in the
-  sender's private bucket: a peer's client sees over `follower_rq`
-  that an attachment exists (and any caption) and renders the fact of
-  it; cross-database file delivery would need a signed-URL relay and
-  is deliberately its own future feature.
+  sender's private bucket, which remains the file's one home: a peer
+  who can read the message fetches the file through the sender's
+  `follower-file` edge function (their follower token plus the upload
+  id buys a short-lived signed URL, gated by `follower_file_target` —
+  only an upload some chat message in a chat naming that follower
+  carries, re-checked on every call). Nothing is copied ahead of time,
+  `uploads` metadata still has no follower policy, and deleting the
+  message or the upload ends delivery. A peer's Syla reaches the same
+  gate through her own project's `following-relay` (kind `file`,
+  `scripts/following-file`), which relays the bytes because her
+  sessions can reach no host but her own project's.
 - **A group is a roster, locally copied.** Whoever assembles it mints
   the `chat_key` and names the followers; each follower's client mirrors
   the row into their own project and names the others back — as far as

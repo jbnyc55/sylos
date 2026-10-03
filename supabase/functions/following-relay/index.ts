@@ -15,12 +15,17 @@
 // reaches the session. The target is always a stored follow's own
 // project_url — this is not an open proxy.
 //
-// POST { name, kind, q? | prompt? | proposal? | chat_key? }
+// POST { name, kind, q? | prompt? | proposal? | chat_key? | upload_id? }
 //   kind "rq"      → their follower_rq(_token, q)            read-only SQL
 //   kind "prompt"  → their follower_submit_prompt(_token, _prompt)
 //   kind "edit"    → their follower_submit_edit(_token, _proposal)
 //   kind "poke"    → their follower_poke_chat(_token, _chat_key)
-// The friend's answer comes back as it is, status included.
+//   kind "file"    → their follower-file edge function, then the file
+// The friend's answer comes back as it is, status included — except
+// "file": there the friend answers a signed URL into THEIR storage
+// host, which Syla's sessions can no more reach than the project
+// itself, so this relay downloads it and answers the BYTES (mime as
+// Content-Type, size and display name in X-Upload-* headers).
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -41,6 +46,65 @@ const CALLS: Record<string, { rpc: string; field: string; arg: string }> = {
   prompt: { rpc: 'follower_submit_prompt', field: 'prompt', arg: '_prompt' },
   edit: { rpc: 'follower_submit_edit', field: 'proposal', arg: '_proposal' },
   poke: { rpc: 'follower_poke_chat', field: 'chat_key', arg: '_chat_key' },
+  file: { rpc: '', field: 'upload_id', arg: '' }, // its own path below
+}
+
+/** kind "file": ask the friend's follower-file for a signed URL, then
+ *  download it and relay the bytes — the one kind whose answer Syla
+ *  couldn't open herself (a URL into the friend's host). */
+async function relayFile(
+  target: { project_url: string; anon_key: string; follower_token: string },
+  name: string,
+  uploadId: string,
+): Promise<Response> {
+  let upstream: Response
+  try {
+    upstream = await fetch(`${target.project_url.replace(/\/$/, '')}/functions/v1/follower-file`, {
+      method: 'POST',
+      headers: {
+        apikey: target.anon_key,
+        Authorization: `Bearer ${target.anon_key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ token: target.follower_token, upload_id: uploadId }),
+    })
+  } catch (e) {
+    return json(502, { error: `couldn't reach ${name}'s database: ${(e as Error).message}` })
+  }
+  if (!upstream.ok) {
+    // Their refusal (or a database that predates follower-file), as it is.
+    const text = await upstream.text()
+    return new Response(text, {
+      status: upstream.status,
+      headers: { ...corsHeaders, 'Content-Type': upstream.headers.get('content-type') ?? 'application/json' },
+    })
+  }
+
+  let signed: { url?: string; mime?: string; bytes?: number; name?: string | null }
+  try {
+    signed = await upstream.json()
+  } catch {
+    return json(502, { error: `${name}'s follower-file answered something that isn't JSON` })
+  }
+  if (!signed.url) return json(502, { error: `${name}'s follower-file answered no URL` })
+
+  let file: Response
+  try {
+    file = await fetch(signed.url)
+  } catch (e) {
+    return json(502, { error: `couldn't download the file from ${name}'s storage: ${(e as Error).message}` })
+  }
+  if (!file.ok) {
+    return json(502, { error: `${name}'s storage refused the signed URL (HTTP ${file.status})` })
+  }
+
+  const headers: Record<string, string> = {
+    ...corsHeaders,
+    'Content-Type': signed.mime ?? file.headers.get('content-type') ?? 'application/octet-stream',
+  }
+  if (typeof signed.bytes === 'number') headers['X-Upload-Bytes'] = String(signed.bytes)
+  if (signed.name) headers['X-Upload-Name'] = encodeURIComponent(signed.name)
+  return new Response(file.body, { status: 200, headers })
 }
 
 Deno.serve(async (req) => {
@@ -60,7 +124,7 @@ Deno.serve(async (req) => {
   const kind = typeof body.kind === 'string' ? body.kind : ''
   const call = CALLS[kind]
   if (!name) return json(400, { error: 'name (the follow) is required' })
-  if (!call) return json(400, { error: 'kind must be rq, prompt, edit or poke' })
+  if (!call) return json(400, { error: 'kind must be rq, prompt, edit, poke or file' })
   const value = body[call.field]
   if (typeof value !== 'string' || !value.trim()) {
     return json(400, { error: `${call.field} is required for kind ${kind}` })
@@ -79,6 +143,8 @@ Deno.serve(async (req) => {
   if (!target?.project_url || !target.anon_key || !target.follower_token) {
     return json(404, { error: `no follow named ${name}` })
   }
+
+  if (kind === 'file') return relayFile(target, name, (value as string).trim())
 
   const payload: Record<string, string> = { _token: target.follower_token }
   payload[call.arg] = kind === 'rq' ? value.replace(/[\s;]+$/, '') : value
