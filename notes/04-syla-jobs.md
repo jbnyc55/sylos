@@ -100,6 +100,20 @@ reading** = `started_at` (a session claimed the run) · the reply = a
 never inferred from the webhook; the `syla_job_runs` queue is the
 source of truth.
 
+While a run is `running`, the top rung also narrates: the session
+keeps `status_note` fresh through `set_syla_run_status()` (gated like
+every claude write), and the thread shows it in place of "Syla's
+reading…" — "Checking the calendar…", "Writing your reply…". The
+notes cost nothing and invent nothing: `scripts/rq` derives one
+deterministically from each query it ships (first table → a Syla-voiced
+phrase, pure string matching, the raw SQL never shown; the only
+query-derived fragment is an `ilike` search term), and
+`scripts/syla-status` sets one by hand at milestones rq cannot see. No
+realtime machinery is involved — the app's existing receipt polling
+simply reads the two columns, a little faster while a run is live.
+Status is cosmetic by design; the recorded facts stay the timestamps
+and the reply row.
+
 ## The webhook credential
 
 The generic routine is fired with its own bearer token, scoped to firing
