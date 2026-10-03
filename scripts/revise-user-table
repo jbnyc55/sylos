@@ -14,8 +14,11 @@
 #   scripts/revise-user-table --id <uuid> \
 #       --title "workouts — from workouts.csv" \
 #       --summary "Same table, minutes now nullable per your note." \
-#       --ddl-file table.sql [--seed-file seed.sql]
+#       --ddl-file table.sql [--seed-file seed.sql] [--agent-writable]
 #   scripts/revise-user-table --id <uuid> --withdraw
+#
+# A revision restates the whole proposal, --agent-writable included:
+# leaving the flag off clears an earlier ask for write access.
 #
 # Environment (all required; see notes/03-agent-access.md):
 #   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
@@ -24,16 +27,17 @@ set -euo pipefail
 
 die() { printf 'error: %s\n' "$*" >&2; exit 1; }
 
-id='' title='' summary='' ddl_file='' seed_file='' withdraw=false
+id='' title='' summary='' ddl_file='' seed_file='' withdraw=false agent_writable=false
 while [ $# -gt 0 ]; do
     case "$1" in
-        --id)        id="${2:?}";        shift 2 ;;
-        --title)     title="${2:?}";     shift 2 ;;
-        --summary)   summary="${2:?}";   shift 2 ;;
-        --ddl-file)  ddl_file="${2:?}";  shift 2 ;;
-        --seed-file) seed_file="${2:?}"; shift 2 ;;
-        --withdraw)  withdraw=true;      shift ;;
-        -h|--help)   sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        --id)             id="${2:?}";        shift 2 ;;
+        --title)          title="${2:?}";     shift 2 ;;
+        --summary)        summary="${2:?}";   shift 2 ;;
+        --ddl-file)       ddl_file="${2:?}";  shift 2 ;;
+        --seed-file)      seed_file="${2:?}"; shift 2 ;;
+        --agent-writable) agent_writable=true; shift ;;
+        --withdraw)       withdraw=true;      shift ;;
+        -h|--help)        sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
         *) die "unknown flag: $1" ;;
     esac
 done
@@ -54,8 +58,8 @@ if $withdraw; then
     body=$(jq -n --arg id "$id" '{_id: $id, _withdraw: true}')
 else
     body=$(jq -n --arg id "$id" --arg title "$title" --arg summary "$summary" \
-        --rawfile ddl "$ddl_file" \
-        '{_id: $id, _title: $title, _summary: $summary, _ddl_sql: $ddl}')
+        --rawfile ddl "$ddl_file" --argjson aw "$agent_writable" \
+        '{_id: $id, _title: $title, _summary: $summary, _ddl_sql: $ddl, _agent_writable: $aw}')
     if [ -n "$seed_file" ]; then
         body=$(printf '%s' "$body" | jq --rawfile seed "$seed_file" '. + {_seed_sql: $seed}')
     fi

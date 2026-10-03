@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+#
+# agent-write — bulk writes into agent-writable user tables, over HTTPS.
+#
+# Ships one batch of plain SQL to the run_agent_write_sql RPC; Postgres
+# executes it as the `claude_writer` role, whose only grants are the user
+# tables the owner approved as agent-writable (the proposal's
+# --agent-writable flag, or the per-table switch in the app). Product
+# tables are out of reach by construction, and a table that currently sits
+# in a silo or names a follower refuses writes until it is private again —
+# an RLS refusal here means "shared now; ask the owner", never "work
+# around it".
+#
+# Usage:
+#   scripts/agent-write "insert into public.dms (sent_at, body) values (...)"
+#   scripts/agent-write - <<'SQL'        # stdin form; avoids shell-quoting pain
+#   insert into public.dms (sent_at, body) values
+#   ('2026-01-01T00:00:00Z', 'hello'),
+#   ('2026-01-01T00:00:05Z', 'hey');
+#   SQL
+#   scripts/agent-write --file batch-01.sql --file batch-02.sql
+#
+# Contract: each call is one transaction of plain INSERT/UPDATE/DELETE
+# statements, at most 10 MB (keep batches to a few MB; a 200 MB load is a
+# few dozen files), 120 s statement timeout. No role switching, no
+# transaction control — the server lints and refuses. With --file, files
+# run in order and the first failure stops the run, so a numbered series
+# is resumable from the failed file.
+#
+# Environment (all required; see notes/03-agent-access.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+if [ $# -lt 1 ] || [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
+    exit 1
+fi
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/03-agent-access.md"
+done
+
+send() { # $1 = the SQL batch, $2 = a label for errors
+    local body resp status
+    body=$(jq -n --arg sql "$1" '{_sql: $sql}')
+    if resp=$(curl -sS --fail-with-body \
+        -X POST "${SUPABASE_URL%/}/rest/v1/rpc/run_agent_write_sql" \
+        -H "apikey: ${SUPABASE_ANON_KEY}" \
+        -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+        -H "content-type: application/json" \
+        --data "$body"); then
+        printf '%s\t' "$2"
+        printf '%s\n' "$resp" | jq -c .
+    else
+        status=$?
+        printf 'failed at %s:\n' "$2" >&2
+        printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+        exit "$status"
+    fi
+}
+
+if [ "$1" = "--file" ]; then
+    files=()
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --file) [ -f "${2:?}" ] || die "no such file: $2"; files+=("$2"); shift 2 ;;
+            *) die "unknown flag: $1 (mix of --file and inline SQL is not supported)" ;;
+        esac
+    done
+    [ ${#files[@]} -gt 0 ] || die "--file needs at least one file"
+    for f in "${files[@]}"; do
+        send "$(cat "$f")" "$f"
+    done
+else
+    if [ "$1" = "-" ]; then q=$(cat); else q="$*"; fi
+    [ -n "$(printf '%s' "$q" | tr -d '[:space:]')" ] || die "empty batch"
+    send "$q" "(inline)"
+fi
