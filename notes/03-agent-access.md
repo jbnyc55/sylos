@@ -10,7 +10,7 @@ A dedicated Postgres role, `claude`:
 | | |
 | --- | --- |
 | **Read** | Every table in `public`, including ones added by later migrations — with a few deliberate exceptions (e.g. OAuth token tables) |
-| **Write** | Narrow, structured paths only: `agent_edits` (insert-only self-reporting); `day_summary` upserts; note silo placement and splits; `docs` in full — insert, update *and* delete — every change captured by trigger in the write-protected `row_edits` log; proposal-queue inserts and feedback-flagged revisions; auto-approve rule *requests*; Syla run claims, finishes and live status notes |
+| **Write** | Narrow, structured paths only: `agent_edits` (insert-only self-reporting); `day_summary` upserts; note silo placement and splits; `docs` in full — insert, update *and* delete — every change captured by trigger in the write-protected `row_edits` log; proposal-queue inserts and feedback-flagged revisions; auto-approve rule *requests*; Syla run claims, finishes and live status notes. Plus, under a second role (`claude_writer`): full DML on **agent tables** — the user tables the owner explicitly flagged agent-writable, suspended while a table is shared ([`07-user-tables.md`](07-user-tables.md)) |
 | **Cannot** | Write any other table or column, update or delete its own log rows, read the `auth` schema, create or drop anything, or switch to another role |
 
 The asymmetry is the point: reads are broad so the agent can answer
@@ -67,6 +67,8 @@ arguments, never SQL, and is idempotent where re-running matters:
 | `scripts/day-summary` | Upsert one day's stats JSON |
 | `scripts/silo-note`, `scripts/split-note` | Place a note in silos / split one into sub-notes |
 | `scripts/doc-save`, `doc-move`, `doc-delete`, `doc-silo` | Edit the docs library (all trigger-logged in `row_edits`) |
+| `scripts/propose-user-table`, `revise-user-table` | File / rework user-table proposals; `--agent-writable` asks for write access on the tables the script creates ([`07-user-tables.md`](07-user-tables.md)) |
+| `scripts/agent-write` | Bulk DML into **agent tables** — user tables the owner approved as agent-writable. The one SQL-carrying write path, and it runs as a second role (`claude_writer`) whose only grants are those tables, with writes suspended while a table is shared ([`07-user-tables.md`](07-user-tables.md)) |
 | `scripts/propose-map-edit`, `propose-todo-edit` | File pending proposals for the owner |
 | `scripts/revise-map-edit`, `revise-todo-edit` | Rework proposals the owner flagged with feedback |
 | `scripts/propose-auto-approve-rule` | Request (never enact) an auto-approve rule |

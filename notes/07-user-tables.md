@@ -49,27 +49,70 @@ Three layers, from authority to backstop:
 - **Tripwires.** `assert_user_table_sql()` lints every script at propose,
   revise, and apply time: no `SECURITY DEFINER`, no role switching, no
   functions/triggers, no foreign schemas, no transaction control, RLS
-  required in the same script as any `create table` — and no write path
-  for `claude`, ever.
+  required in the same script as any `create table` — and no write
+  grants to the agent's roles inside scripts, ever (write access, where
+  the owner grants it, is the uniform machinery below, never a grant
+  line buried in a script).
 
-**User tables are the owner's.** That last rule is the invariant the
-owner chose: Syla reads user tables like everything else in `public`
-(default privileges grant her role `select` on them; the proposal script
-adds her per-table read policy), and she never writes them — no grant,
-no RPC, no trigger. Every row in a user table was written by the owner's
-own authenticated session: the app, or a vibe app. If some future
-integration must feed a user table, that is an edge function with its
-own controlled path (see `notes/06-integrations.md`), proposed and
-merged like any integration — still not Syla's role.
+**User tables start as the owner's.** By default Syla reads user tables
+like everything else in `public` (default privileges grant her role
+`select` on them; the proposal script adds her per-table read policy)
+and writes none of them — no grant, no RPC, no trigger: every row was
+written by the owner's own authenticated session, the app or a vibe
+app. The one exception is a table the owner approved as an **agent
+table** (below). If some future integration must feed a user table,
+that is an edge function with its own controlled path (see
+`notes/06-integrations.md`) — still not Syla's role.
+
+## Agent tables — the bulk write exception (`20270102000000`)
+
+"Load these 200 MB of exported DMs into a table" cannot ride a 5 MB
+seed, and routing it through the owner's own session makes the owner a
+copy machine. So the owner can grant the one exception, and it is
+granted the same way everything here is — on a card:
+
+- **The ask is the flag.** `propose_user_table` takes `_agent_writable`
+  (`scripts/propose-user-table --agent-writable`); the card shows it,
+  and the summary is expected to say why. Applying the proposal flags
+  exactly the tables the script created as `agent_writable` in
+  `data_tables` — a proposal that creates no table refuses the flag.
+- **The boundary is a second role.** `claude_writer` is NOLOGIN with no
+  standing grants; `apply_agent_writability()` (fired by the registry
+  flag's trigger) grants it full DML per flagged table and refuses any
+  table not owned by `user_tables_owner`. Product tables are out of
+  reach the way they are for the sandbox role: Postgres holds nothing
+  to honor. Scripts never mention the role — the lint refuses the word.
+- **The transport is `run_agent_write_sql`** (`scripts/agent-write`):
+  batches of plain INSERT/UPDATE/DELETE statements, 10 MB per call,
+  120 s timeout, linted against role switching and transaction control.
+  A 200 MB load is a few dozen calls.
+- **Sharing suspends writing.** The per-table policy
+  (`agent_table_is_private`) refuses every `claude_writer` row
+  operation while the table sits in any silo or names any follower —
+  so a placement made mid-upload stops the upload instead of
+  publishing it. Unsiloed and marked-siloed both count as private.
+- **The owner can revoke at any time**: `data_tables.agent_writable` is
+  owner-updatable like `siloed_at`, and flipping it off removes the
+  grants and the policy.
+- **The log stays honest, without doubling storage.** A `claude_writer`
+  INSERT into an id-bearing table logs attribution to `row_edits`
+  without the row image (undo of an insert is its id); updates and
+  deletes keep full before/after images like every other write.
+
+Siloing is untouched: an agent table registers with the warden like any
+table, lands in Silo Soon as **one** entry however many rows it holds,
+and only the owner ever places it — Syla still has no write path into
+placements.
 
 ## Data
 
 A seed rides the proposal as plain INSERTs (`seed_sql`, capped at 5 MB,
 sensibly ~2 MB) and runs in the same transaction as the DDL, so a card
 is one tap from "CSV in a note" to "table with the data in it". Bigger
-datasets: propose the table alone and give the vibe app an import
-screen — the data then enters under the owner's own session, RLS
-applying to every row.
+datasets take one of two roads: an **agent table** (above — Syla loads
+it herself in batches after the owner's apply), or the table alone plus
+a vibe-app import screen, where the data enters under the owner's own
+session with RLS applying to every row.
 
 ## Where a user table lands: siloed or unsiloed, never invisible
 
