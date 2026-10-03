@@ -73,6 +73,7 @@ arguments, never SQL, and is idempotent where re-running matters:
 | `scripts/link-goal-cells` | Annotate same-concept goal cells as a synergy group |
 | `scripts/log-lift` | Append weight-lift rows parsed from notes |
 | `scripts/syla-claim`, `syla-finish`, `syla-set-webhook` | The job queue — see [`04-syla-jobs.md`](04-syla-jobs.md) |
+| `scripts/chat-say`, `chat-propose`, `chat-auto-reply`, `chat-waiting`, `suggest-reply-rule` | The chat surface: the receipt into the Syla conversation, reply drafts, rule-covered auto-replies, the blue dot, and reply-rule suggestions — the `skills/chat-replies` doc is the semantic preflight |
 | `scripts/file-url` | A read, not a write: a short-lived signed link for an `uploads` row (the claude-file edge function; rq is SQL and cannot carry bytes), so Syla can look at a dropped photo or document before filing it |
 
 This is also the pattern for anything you add later: a new agent

@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+#
+# chat-waiting — raise or lower a chat's waiting-on-the-human flag, over HTTPS.
+#
+# Calls the set_chat_waiting RPC, which switches to the `claude` role and
+# sets chats.waiting_on_human — the blue dot. Raise it when a reply needs
+# the owner; the client lowers it when they answer.
+#
+# Usage:
+#   scripts/chat-waiting --chat <chat-uuid> --on
+#   scripts/chat-waiting --chat <chat-uuid> --off
+#
+# Flags: --chat and exactly one of --on / --off.
+#
+# Environment (all required; see notes/03-agent-access.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+chat='' waiting=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --chat) chat="${2:?}"; shift 2 ;;
+        --on)   waiting=true; shift ;;
+        --off)  waiting=false; shift ;;
+        -h|--help) sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+[ -n "$chat" ] && [ -n "$waiting" ] || die "--chat and one of --on / --off are required"
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/03-agent-access.md"
+done
+
+payload=$(jq -n --arg chat "$chat" --argjson waiting "$waiting" '
+    {_chat_id: $chat, _waiting: $waiting}')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/set_chat_waiting" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$payload"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi

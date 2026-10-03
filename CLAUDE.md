@@ -76,7 +76,8 @@ generic on purpose; the work is in the queue:
    event for the calendar; the owner approves in the Inbox). A
    question, a note or a passing thought gets no calendar or todo
    entry at all. Either way, answer in the Syla conversation
-   (`syla_chat_say`, citing the run), then report the run.
+   (`scripts/chat-say --body <reply> --run <run_id>`), then report the
+   run.
 5. Report every claimed run before stopping:
    `scripts/syla-finish --run <run_id> --status done --summary "<1–2 sentences>"`
    (or `--status failed` with the reason, if a run cannot be completed).
