@@ -134,11 +134,18 @@ The generic routine is fired with its own bearer token, scoped to firing
 that one routine — it reads nothing else. It lives in Vault as
 `syla_webhook_token` alongside `syla_webhook_url`, written through
 `scripts/syla-set-webhook` → `set_syla_webhook()`. The RPC is gated by
-the usual rq key and **pins the URL to
-`https://api.anthropic.com/v1/claude_code/routines/…/fire`**, so a leaked
-rq key could rotate or break the webhook but never redirect the token to
-a host that would capture it. `pg_net` and `pg_cron` are server-side
-only.
+the usual rq key and **pins the URL**: it must be
+`https://api.anthropic.com/v1/claude_code/routines/…/fire` or this
+project's own `syla-fire` edge function (the self-hosted Daytona worker
+path — `daytona/README.md`), so a leaked rq key could rotate or break
+the webhook but never redirect the token to a host that would capture
+it. `pg_net` and `pg_cron` are server-side only.
+
+The dispatcher never knows which of the two answers: the fire is the
+same bearer-token POST either way, Delivered still means only "the
+endpoint answered 2xx", and the queue stays the source of truth. The
+Daytona path spawns one sandbox per fire that runs the identical
+claim → docs → finish loop on an open-weights model.
 
 ## The docs are the instructions
 

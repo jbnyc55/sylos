@@ -4,9 +4,10 @@
 #
 # Calls the set_syla_webhook RPC, which upserts two Vault secrets —
 # syla_webhook_url and syla_webhook_token — that the pg_cron dispatcher
-# uses to fire the generic Syla routine. The server refuses any URL that
-# is not an api.anthropic.com routine fire endpoint, so the token can never
-# be redirected elsewhere.
+# uses to fire Syla awake. The server refuses any URL that is not an
+# api.anthropic.com routine fire endpoint or this project's own
+# syla-fire edge function (the Daytona worker path, daytona/README.md),
+# so the token can never be redirected elsewhere.
 #
 # Usage:
 #   scripts/syla-set-webhook --url <fire-url> --token-file <file>
