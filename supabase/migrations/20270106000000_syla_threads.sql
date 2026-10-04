@@ -11,13 +11,19 @@
 -- before: the oldest syla chat is the default, seeded on demand.
 
 -- ── send_to_syla: an optional thread ─────────────────────────────────────
--- Dropped, not replaced in place: keeping both arities would make
--- the PostgREST call ambiguous. The two-argument call shape still
--- works against this one through the default.
+-- Body otherwise 20261211000000's (the attachment-carrying form).
+-- Dropped, not replaced in place: a second arity would make the
+-- PostgREST call ambiguous. Calls without _chat_id (and without
+-- _upload_id) land on the defaults, so existing clients are
+-- untouched.
 
-drop function public.send_to_syla(text, text);
+drop function public.send_to_syla(text, text, uuid);
 
-create function public.send_to_syla(_about text, _text text, _chat_id uuid default null)
+create function public.send_to_syla(
+    _about text, _text text,
+    _upload_id uuid default null,
+    _chat_id uuid default null
+)
 returns jsonb
 language plpgsql
 security definer
@@ -38,13 +44,28 @@ begin
     if _about is null or char_length(btrim(_about)) not between 1 and 200 then
         raise exception 'the subject must be 1–200 characters';
     end if;
-    if _text is null or char_length(btrim(_text)) not between 1 and 4000 then
-        raise exception 'the message must be 1–4000 characters';
+    -- Words, a file, or both — like any chat message.
+    if _text is null then
+        _text := '';
+    end if;
+    if char_length(btrim(_text)) > 4000 then
+        raise exception 'the message must be at most 4000 characters';
+    end if;
+    if char_length(btrim(_text)) = 0 and _upload_id is null then
+        raise exception 'the message needs words or an attachment';
     end if;
 
     _profile := public.current_profile_id();
     if _profile is null then
         raise exception 'no profile for this session';
+    end if;
+
+    -- SECURITY DEFINER: never let a send point at someone else's file.
+    if _upload_id is not null and not exists (
+        select 1 from public.uploads u
+        where u.id = _upload_id and u.profile_id = _profile
+    ) then
+        raise exception 'no upload with id % for this owner', _upload_id;
     end if;
 
     -- The thread: the one the caller names (it must be a Syla
@@ -69,8 +90,8 @@ begin
     values (null)
     returning id into _run_id;
 
-    insert into public.chat_messages (chat_id, body, author, kind, syla_run_id)
-    values (_chat, btrim(_text), 'me', 'text', _run_id);
+    insert into public.chat_messages (chat_id, body, author, kind, syla_run_id, upload_id)
+    values (_chat, btrim(_text), 'me', 'text', _run_id, _upload_id);
 
     -- Fire now, the dispatcher's own way. Missing credential: leave the
     -- run queued for the every-minute dispatcher.
@@ -100,7 +121,12 @@ begin
                         || 'a passing thought gets no calendar or todo '
                         || 'entry at all. Either way answer in the Syla '
                         || 'conversation with syla_chat_say citing the '
-                        || 'run, then finish the run.'),
+                        || 'run, then finish the run.'
+                        || case when _upload_id is null then '' else
+                           ' The message carries an attached file — the '
+                           || 'claim entry''s message_upload_id names it; '
+                           || 'scripts/file-url answers a signed link so '
+                           || 'you can look at it before deciding.' end),
             timeout_milliseconds := 15000);
 
         update public.syla_job_runs
@@ -113,12 +139,12 @@ begin
 end;
 $$;
 
-comment on function public.send_to_syla(text, text, uuid) is
-    'The app''s send-to-Syla, thread-aware: the owner''s message lands in the named Syla thread (or the oldest one — the default conversation) linked to a queued event-less run, and the webhook fires inline with the Vault credential. Owner only; _chat_id must be a kind=syla chat. Without a stored credential the run waits for the every-minute dispatcher.';
+comment on function public.send_to_syla(text, text, uuid, uuid) is
+    'The app''s send-to-Syla, thread-aware: the owner''s message (words, an attached upload, or both) lands in the named Syla thread — or the oldest one, the default conversation — linked to a queued event-less run, and the webhook fires inline with the Vault credential. Owner only; _chat_id must be a kind=syla chat. Without a stored credential the run waits for the every-minute dispatcher.';
 
-revoke all on function public.send_to_syla(text, text, uuid) from public;
-revoke all on function public.send_to_syla(text, text, uuid) from anon;
-grant execute on function public.send_to_syla(text, text, uuid) to authenticated;
+revoke all on function public.send_to_syla(text, text, uuid, uuid) from public;
+revoke all on function public.send_to_syla(text, text, uuid, uuid) from anon;
+grant execute on function public.send_to_syla(text, text, uuid, uuid) to authenticated;
 
 -- ── syla_chat_say: the reply follows the run home ────────────────────────
 
