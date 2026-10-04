@@ -54,6 +54,14 @@ create, retime, or delete an event — that is the owner's calendar.
   style) *and* raw `chute_items` are waiting, it queues a run of the
   seeded Chute sort event — which is pre-latched forever, so only this
   branch ever fires it (`notes/12-chute.md`);
+- runs the **sweep branch**, the chute branch's twin for siloing: when
+  the cadence in `silo_settings` (hourly / thrice / nightly at a time /
+  weekly — stock is nightly at 02:00) says a sweep is due (vs
+  `last_swept_at`) *and* something waits — an unvetted top-level jot,
+  an unplaced unshared doc (neither carrying an open silo ask), or a
+  silo stamped `resweep_requested_at` by a retroactive rulebook change
+  — it queues a run of the seeded, likewise pre-latched Silo sweep
+  event (its doc `syla/silo-sweep` is the procedure);
 - fails runs that were claimed but never finished within 2 hours or
   that three webhook fires couldn't get claimed;
 - POSTs the routine's fire endpoint once for everything still queued.
@@ -66,8 +74,9 @@ Failure is designed to be visible, never silent: no Vault credential →
 runs sit `queued`; webhook lost → re-fired up to 3 times, then `failed`
 with a reason; session died → `failed` after 2 hours.
 
-Four paths skip the tick entirely, all queue-and-fire-inline with the
+Five paths skip the tick entirely, all queue-and-fire-inline with the
 same Vault credential: the chute's **Sort now** (`sort_chute_now()`),
+the Silos app's **Silo now** (`sweep_silos_now()`, the same pattern),
 the Syla thread's send, a flagged proposal's **edit feedback**
 (`proposal_feedback_wakes_syla()` — the owner marking an agent edit
 proposal `changes_requested` queues a run of the pre-latched Edit
