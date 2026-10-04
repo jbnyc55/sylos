@@ -147,6 +147,35 @@ endpoint answered 2xx", and the queue stays the source of truth. The
 Daytona path spawns one sandbox per fire that runs the identical
 claim → docs → finish loop on an open-weights model.
 
+## The Mac default and the cloud fallback
+
+With the Mac app (`sylos_mac`, private) the default worker is the
+owner's own computer: the app polls the queue every ~20 seconds and
+claims through the same gated RPCs. The cloud's job is then only the
+closed-lid case, and the decision lives at the edge, not in the
+dispatcher:
+
+- the Mac stamps a heartbeat each tick — `worker_heartbeat()` upserts
+  its `worker_presence` row and returns the queued count, so presence
+  and the queue peek are one call. Presence is cosmetic state in the
+  `status_note` tradition: watched, never audited.
+- the webhook points at this project's own `syla-fire` function
+  (`daytona/README.md`). On every fire it reads the freshest
+  heartbeat: seen within the window (90 s, `WORKER_FRESH_SECONDS`) →
+  it answers 2xx and stands down, the Mac has this; stale or absent →
+  it spawns the Daytona sandbox. A lid closed moments after a fresh
+  heartbeat costs only the dispatcher's normal re-fire (20 minutes,
+  3 tries) before the cloud takes over; races are harmless because
+  claims are atomic and an extra worker finds an empty queue.
+- where a run actually ran is a recorded fact, not an inference:
+  `claim_syla_runs(_worker)` stamps `syla_job_runs.claimed_by`
+  (`mac` | `cloud` | `routine`; the Mac app and `daytona/run-syla.sh`
+  each pass their own name via `SYLA_WORKER`). The apps' receipt
+  ladder reads that column — and reads `worker_presence` — to say
+  "on your Mac" / "in the cloud".
+- off is `clear_syla_webhook()`: with no Vault credential the
+  dispatcher leaves runs queued, which is exactly "wait for the Mac".
+
 ## The docs are the instructions
 
 The starter seeds two Syla events the moment the owner's account is

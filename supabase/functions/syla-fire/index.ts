@@ -39,6 +39,12 @@ import { Daytona } from 'npm:@daytonaio/sdk'
 const DEFAULT_MODEL = 'openrouter/z-ai/glm-5.3'
 const DEFAULT_REPO = 'https://github.com/jbnyc55/sylos'
 
+// Seconds since the last local-worker heartbeat (worker_presence,
+// stamped by the Mac app every ~20s) under which the cloud stands
+// down: the Mac is awake and will claim the queue itself. Override
+// with the WORKER_FRESH_SECONDS secret.
+const DEFAULT_WORKER_FRESH_SECONDS = 90
+
 // Minutes of Daytona-visible inactivity before the sandbox auto-stops.
 // The worker makes no Daytona API calls while running, so this is in
 // practice a hard cap on a worker's lifetime — keep it at or below the
@@ -68,10 +74,54 @@ async function tokenMatches(presented: string, expected: string) {
   return diff === 0
 }
 
+/** Seconds since the newest worker_presence heartbeat, or null when no
+ * local worker has ever been seen (or the presence table predates this
+ * project's migrations). Read through the same gated rq path every
+ * agent surface uses — any failure means "unknown", and unknown falls
+ * through to provisioning: better a wasted sandbox (an empty claim
+ * exits) than a run nobody picks up. */
+async function localWorkerAgeSeconds(): Promise<number | null> {
+  const env = (name: string) => Deno.env.get(name) ?? ''
+  try {
+    const resp = await fetch(`${env('SUPABASE_URL')}/rest/v1/rpc/run_readonly_sql`, {
+      method: 'POST',
+      headers: {
+        apikey: env('SUPABASE_ANON_KEY'),
+        'x-claude-rq-key': env('CLAUDE_RQ_KEY'),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        q: 'select extract(epoch from (now() - max(last_seen_at)))::float8 as age from worker_presence',
+      }),
+    })
+    if (!resp.ok) return null
+    const rows = await resp.json()
+    const age = rows?.[0]?.age
+    return typeof age === 'number' ? age : null
+  } catch {
+    return null
+  }
+}
+
 async function provision() {
   const env = (name: string) => Deno.env.get(name) ?? ''
   const repo = env('SYLA_REPO_URL') || DEFAULT_REPO
   const snapshot = env('DAYTONA_SNAPSHOT')
+
+  // The Mac is the default worker: a fresh heartbeat means it is awake
+  // and its own poll will claim the queue, so no sandbox. A stale or
+  // absent heartbeat (lid closed, no Mac app at all) means the cloud
+  // works this fire. Races stay harmless — claims are atomic and a
+  // duplicate worker finds an empty queue.
+  const freshWindow =
+    Number(env('WORKER_FRESH_SECONDS')) || DEFAULT_WORKER_FRESH_SECONDS
+  const age = await localWorkerAgeSeconds()
+  if (age !== null && age < freshWindow) {
+    console.log(
+      `syla-fire: local worker seen ${Math.round(age)}s ago (< ${freshWindow}s) — standing down, the Mac has this`,
+    )
+    return
+  }
 
   const daytona = new Daytona({ apiKey: env('DAYTONA_API_KEY') })
   const sandbox = await daytona.create({

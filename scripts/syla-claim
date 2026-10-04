@@ -28,12 +28,20 @@ for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
     [ -n "${!v:-}" ] || die "$v is not set — see notes/07-agent-rq-https.md"
 done
 
+# SYLA_WORKER (mac | cloud | routine), when the environment names it,
+# stamps claimed_by on every claimed run — the apps' "on your Mac" /
+# "in the cloud" receipt. Unset sends no stamp.
+body='{}'
+if [ -n "${SYLA_WORKER:-}" ]; then
+    body=$(jq -n --arg w "$SYLA_WORKER" '{_worker: $w}')
+fi
+
 if resp=$(curl -sS --fail-with-body \
     -X POST "${SUPABASE_URL%/}/rest/v1/rpc/claim_syla_runs" \
     -H "apikey: ${SUPABASE_ANON_KEY}" \
     -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
     -H "content-type: application/json" \
-    --data '{}'); then
+    --data "$body"); then
     printf '%s\n' "$resp" | jq .
 else
     status=$?

@@ -40,6 +40,10 @@ fi
 # contract, same file.
 ln -sf CLAUDE.md AGENTS.md
 
+# Claims from this sandbox stamp claimed_by='cloud', so the apps can
+# say "in the cloud" on the receipt (the Mac app stamps 'mac').
+export SYLA_WORKER=cloud
+
 # Headless runs cannot answer permission prompts; the real boundary is
 # in Postgres (read-only rq, gated RPCs), not in the harness.
 cat > opencode.json <<'JSON'
