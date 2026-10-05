@@ -29,8 +29,10 @@
 //   CLAUDE_RQ_KEY       Syla's own database credential, passed in
 // Optional:
 //   SYLA_MODEL          opencode model id (default below)
-//   DAYTONA_SNAPSHOT    a prebaked snapshot name (daytona/Dockerfile);
-//                       unset uses Daytona's default image, slower first run
+//   DAYTONA_SNAPSHOT    override the prebaked snapshot by name; unset,
+//                       the function manages its own (AUTO_SNAPSHOT
+//                       below): looks it up, builds it once when the
+//                       account lacks it, boots from it when active
 //   SYLA_REPO_URL       the starter clone URL (default: the public starter)
 // SUPABASE_URL and SUPABASE_ANON_KEY are injected by the platform.
 
@@ -38,6 +40,24 @@ import { Daytona } from 'npm:@daytonaio/sdk'
 
 const DEFAULT_MODEL = 'openrouter/z-ai/glm-5.3'
 const DEFAULT_REPO = 'https://github.com/jbnyc55/sylos'
+
+// The prebaked worker snapshot, managed by this function itself: each
+// provision looks it up by name on the owner's Daytona account, kicks
+// off the one-time build when it is missing, and boots sandboxes from
+// it once it is active. Fires that arrive before then use the stock
+// image — slower, never blocked. The recipe mirrors daytona/Dockerfile
+// (the manual-build path); bump the name suffix whenever it changes so
+// existing accounts rebuild.
+const AUTO_SNAPSHOT = 'syla-worker:1'
+const SNAPSHOT_DOCKERFILE = `FROM node:22-slim
+RUN apt-get update \\
+    && apt-get install -y --no-install-recommends \\
+       git curl ca-certificates jq \\
+    && rm -rf /var/lib/apt/lists/*
+RUN npm install -g opencode-ai@latest
+`
+const SNAPSHOT_RESOURCES = { cpu: 2, memory: 4, disk: 10 }
+const DAYTONA_API = 'https://app.daytona.io/api'
 
 // Seconds since the last local-worker heartbeat (worker_presence,
 // stamped by the Mac app every ~20s) under which the cloud stands
@@ -103,10 +123,75 @@ async function localWorkerAgeSeconds(): Promise<number | null> {
   }
 }
 
+/** The snapshot to boot this fire's sandbox from: DAYTONA_SNAPSHOT
+ * when the owner set one, else the auto-managed AUTO_SNAPSHOT — by
+ * name over the raw Daytona API (the SDK's snapshot service would do,
+ * but plain fetch keeps the failure modes visible). Null means "stock
+ * image this fire": the build is still running, was just kicked off,
+ * or cannot happen (a sandbox-only API key gets 403 on create — then
+ * either widen the key's permissions or build manually per
+ * daytona/README.md and set DAYTONA_SNAPSHOT). Every branch logs. */
+async function ensureSnapshot(apiKey: string): Promise<string | null> {
+  const explicit = Deno.env.get('DAYTONA_SNAPSHOT')
+  if (explicit) return explicit
+
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    'Content-Type': 'application/json',
+  }
+  try {
+    const lookup = await fetch(
+      `${DAYTONA_API}/snapshots/${encodeURIComponent(AUTO_SNAPSHOT)}`,
+      { headers },
+    )
+    if (lookup.ok) {
+      const snap = await lookup.json()
+      const state = String(snap?.state ?? '')
+      if (state === 'active') return AUTO_SNAPSHOT
+      if (state === 'error' || state === 'build_failed') {
+        console.error(
+          `syla-fire: snapshot ${AUTO_SNAPSHOT} failed to build (${snap?.errorReason ?? 'no reason recorded'}) — stock image; delete the snapshot on app.daytona.io to retry`,
+        )
+        return null
+      }
+      console.log(
+        `syla-fire: snapshot ${AUTO_SNAPSHOT} is ${state || 'building'} — stock image this fire`,
+      )
+      return null
+    }
+
+    // Not there yet — kick off the one-time build. Daytona builds it
+    // server-side, so this fire doesn't wait; the next one checks in.
+    const create = await fetch(`${DAYTONA_API}/snapshots`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: AUTO_SNAPSHOT,
+        buildInfo: { dockerfileContent: SNAPSHOT_DOCKERFILE },
+        ...SNAPSHOT_RESOURCES,
+      }),
+    })
+    if (create.ok) {
+      console.log(
+        `syla-fire: building snapshot ${AUTO_SNAPSHOT} (one-time) — fires boot from it once it is active`,
+      )
+    } else {
+      console.error(
+        `syla-fire: could not start the ${AUTO_SNAPSHOT} build (HTTP ${create.status}: ${(await create.text()).slice(0, 200)}) — stock image; the Daytona key may lack snapshot permissions`,
+      )
+    }
+  } catch (e) {
+    console.error(
+      'syla-fire: snapshot check failed —',
+      (e as Error)?.message ?? e,
+    )
+  }
+  return null
+}
+
 async function provision() {
   const env = (name: string) => Deno.env.get(name) ?? ''
   const repo = env('SYLA_REPO_URL') || DEFAULT_REPO
-  const snapshot = env('DAYTONA_SNAPSHOT')
 
   // The Mac is the default worker: a fresh heartbeat means it is awake
   // and its own poll will claim the queue, so no sandbox. A stale or
@@ -123,6 +208,7 @@ async function provision() {
     return
   }
 
+  const snapshot = await ensureSnapshot(env('DAYTONA_API_KEY'))
   const daytona = new Daytona({ apiKey: env('DAYTONA_API_KEY') })
   const sandbox = await daytona.create({
     ...(snapshot ? { snapshot } : {}),

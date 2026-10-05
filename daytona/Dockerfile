@@ -1,7 +1,10 @@
 # The syla-worker snapshot — everything run-syla.sh would otherwise
 # install at run time, prebaked so a fire turns into a working agent in
-# seconds. Build it into a Daytona snapshot once (see README.md) and set
-# DAYTONA_SNAPSHOT on the syla-fire function to use it.
+# seconds. syla-fire normally builds this itself (its SNAPSHOT_DOCKERFILE
+# mirrors this file — keep them in lockstep, and bump AUTO_SNAPSHOT's
+# name suffix on any change); this file is the reference recipe and the
+# manual-build path (README.md step 3) for keys that cannot create
+# snapshots.
 FROM node:22-slim
 
 RUN apt-get update \
