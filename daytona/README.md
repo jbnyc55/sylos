@@ -53,21 +53,28 @@ Daytona sandbox ── daytona/run-syla.sh
    | `OPENROUTER_API_KEY` | from openrouter.ai |
    | `CLAUDE_RQ_KEY` | Syla's existing rq key (the same one in your agent env) |
    | `SYLA_MODEL` *(optional)* | opencode model id; default `openrouter/z-ai/glm-5.3` — check the exact id on openrouter.ai and override if it differs |
-   | `DAYTONA_SNAPSHOT` *(optional)* | prebaked snapshot name (step 3) |
+   | `DAYTONA_SNAPSHOT` *(optional)* | override the prebaked snapshot by name — normally unnecessary, see step 3 |
 
    The function deploys like every other one in `supabase/functions/`
    (the app's launch sync ships it automatically).
 
-3. **Snapshot (optional but recommended).** Without one, each fire
-   installs opencode from npm before working (roughly a minute). Bake
-   it once with the Daytona CLI — check `daytona snapshot create --help`
-   for your CLI version's exact flags:
+3. **Snapshot — automatic.** Sandboxes boot from a prebaked
+   `syla-worker:1` snapshot (`daytona/Dockerfile`: git, jq, opencode)
+   instead of installing those on every fire. `syla-fire` manages it
+   itself: on each fire it looks the snapshot up on your Daytona
+   account, kicks off the one-time build if it's missing, and uses it
+   once active — fires that arrive mid-build run on the stock image
+   (slower, never blocked). Two caveats:
 
-   ```bash
-   daytona snapshot create syla-worker:1 --dockerfile daytona/Dockerfile
-   ```
-
-   then set `DAYTONA_SNAPSHOT=syla-worker:1`.
+   - The build needs `DAYTONA_API_KEY` to be allowed to create
+     snapshots. A sandbox-only key keeps working, just never gets the
+     fast path — the function log says so. Then either widen the key
+     or build manually with the Daytona CLI
+     (`daytona snapshot create syla-worker:1 --dockerfile daytona/Dockerfile`
+     — check `--help` for your CLI version's flags) and set
+     `DAYTONA_SNAPSHOT=syla-worker:1`.
+   - `DAYTONA_SNAPSHOT`, when set, always wins — use it to pin a
+     custom image.
 
 4. **Point the webhook here.** The setter pins URLs; your project's own
    `syla-fire` function is an allowed target (the pin check compares
