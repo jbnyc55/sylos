@@ -30,7 +30,13 @@ sylos-company `web/`, plus one edge function,
    database password (kept in the Keychain; the dashboard can always
    reset it), then polls until the database is healthy. A project named
    `sylos` that already exists is reused, so a failed run retries clean.
-   Auth is set to skip email confirmation on the owner sign-up.
+   Auth is set to skip email confirmation on the owner sign-up, and the
+   same `PATCH /v1/projects/{ref}/config/auth` enables the project's
+   **OAuth 2.1 server** (`oauth_server_enabled`,
+   `oauth_server_allow_dynamic_registration`,
+   `oauth_server_authorization_path = '/oauth/consent'`,
+   `site_url = 'https://getsylos.com'`) — what lets the database be
+   added to Claude as a connector (`notes/13-claude-connector.md`).
 4. **Schema** — the app is the migration runner: it lists
    `supabase/migrations/` on the owner's fork (falling back to the
    starter repo), applies each unapplied file in filename order through

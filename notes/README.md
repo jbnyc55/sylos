@@ -21,6 +21,7 @@ password, or key checked into this repo, rotate it immediately.
 | [`10-minis-and-chat.md`](10-minis-and-chat.md) | Minis and chat: every mini a row in your own database, chat personal all the way down (your words in your project, a DM a mutual follow), message authors and kinds, and Syla as a conversation with real receipts. |
 | [`11-connections-and-reply-rules.md`](11-connections-and-reply-rules.md) | Connections: one lifecycle over the directional machinery, the reply ladder (off → propose → auto), reply rules as the per-person preflight, and one-sided visibility. |
 | [`12-chute.md`](12-chute.md) | The chute: capture with no filing decision, Syla's scheduled sort, undo as row_edits, ambiguity as Inbox questions. |
+| [`13-claude-connector.md`](13-claude-connector.md) | The Claude connector: every database a remote MCP server (the `syla-mcp` function + Supabase Auth's OAuth 2.1 server), routines wired by add-connector-and-log-in, the containment hook, and why the Mac app is no longer required. |
 
 ## The thirty-second version
 
@@ -39,7 +40,10 @@ password, or key checked into this repo, rotate it immediately.
   **row level security is the entire authorization layer**.
 - Claude reads the database as the `claude` role over HTTPS (`scripts/rq`)
   and writes only through structured, Vault-gated RPCs; everything that
-  matters is captured in the trigger-written `row_edits` undo log.
+  matters is captured in the trigger-written `row_edits` undo log. The
+  database is also a **Claude connector** (a remote MCP server at
+  `/functions/v1/syla-mcp`) exposing exactly that role as tools, so a
+  routine needs only the connector — `13-claude-connector.md`.
 - Syla's recurring work is scheduled as events assigned to her (edited
   from the app's Today tab) and instructed by the docs attached to each
   event (edited from the Docs side of Notes); what she knows how to do

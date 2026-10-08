@@ -57,16 +57,22 @@ these with links and copy buttons. Doing it by hand instead:
    your account right in the app — sign up promptly; the first account
    in is the owner (a database trigger crowns it;
    `supabase/migrations/20260930000000_first_signup_owner.sql`).
-3. **Agent access**: generate a key (`openssl rand -hex 32`), store it in
-   Supabase Vault as `claude_rq_key`, and set `SUPABASE_URL`,
-   `SUPABASE_ANON_KEY`, `CLAUDE_RQ_KEY` in your Claude Code environment.
-   Verify with `scripts/rq "select current_user"` → `claude`. See
+3. **Agent access**: generate a key (`openssl rand -hex 32`) and store
+   it in Supabase Vault as `claude_rq_key`. Then add your database to
+   Claude as a connector —
+   `https://<project-ref>.supabase.co/functions/v1/syla-mcp`, log in
+   with your Sylos account — and Claude holds exactly the `claude`
+   role as tools (`notes/13-claude-connector.md`). The env-var route
+   (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `CLAUDE_RQ_KEY` + this repo's
+   scripts) remains as the fallback; verify it with
+   `scripts/rq "select current_user"` → `claude`. See
    `notes/03-agent-access.md`.
 4. **Syla's schedule**: create one fire-only Routine ("Syla task",
-   prompt: clone this repo, read its CLAUDE.md, and do the task) with an
-   API trigger in claude.ai/code → Routines, then store its fire URL +
-   token with `scripts/syla-set-webhook`. The dispatcher inside the
-   database does the rest. See `notes/04-syla-jobs.md`.
+   prompt *"Do the task."*, your Sylos connector attached — no
+   repository needed) with an API trigger in claude.ai/code → Routines,
+   then store its fire URL + token with `scripts/syla-set-webhook`.
+   The dispatcher inside the database does the rest. See
+   `notes/04-syla-jobs.md`.
 
 ## Local development
 

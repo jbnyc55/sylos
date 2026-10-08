@@ -23,17 +23,21 @@ configuration, no backend.
    project, every migration from this starter in filename order,
    edge functions, Syla's rq key into the Vault, the app keys —
    `notes/08-provisioning.md` mechanics, run from the browser.
-5. **Claude environment** — create the environment on *your* Claude
-   Code account with `SUPABASE_URL`, `SUPABASE_ANON_KEY`,
-   `CLAUDE_RQ_KEY`, network allowance for your project host and
-   github.com. (Hosted Syla is gone; it's your Claude or nothing —
+5. **Add your connector** — on *your* Claude account, Settings →
+   Connectors → Add custom connector, URL
+   `https://<project-ref>.supabase.co/functions/v1/syla-mcp`, then log
+   in with the Sylos email and password from step 1 and approve on the
+   consent page. Your database is now a Claude connector — the whole
+   agent-access story in one login (`notes/13-claude-connector.md`).
+   (Hosted Syla is gone; it's your Claude or nothing —
    `notes/09-hosted-trial.md` is historical.)
-6. **Create routine** — one fire-only Routine named **Syla task** —
-   prompt: *"Clone https://github.com/jbnyc55/sylos (the public Sylos
-   starter), read its CLAUDE.md, and do the task."* — with an API
-   trigger. The page stores the fire URL and token in your project's
-   Vault through `set_syla_webhook` (`scripts/syla-set-webhook` is the
-   by-hand route); the in-database dispatcher does the rest
+6. **Create routine** — one fire-only Routine named **Syla task**,
+   prompt *"Do the task."*, with your Sylos connector attached and an
+   API trigger. No repository, no environment, no variables — the
+   connector carries the tools and the instructions. The page stores
+   the fire URL and token in your project's Vault through
+   `set_syla_webhook` (`scripts/syla-set-webhook` is the by-hand
+   route); the in-database dispatcher does the rest
    (`notes/04-syla-jobs.md`).
 7. **QR handoff** — the page shows a QR code; the phone scans it and is
    in. Details below, because this is where the powerful credential
@@ -73,7 +77,10 @@ client shipped, the iPhone runs its launch sync.
 
 ## Agent access, by hand
 
-The web flow does this for you; the manual route:
+The web flow does this for you, and the connector (step 5) is the
+normal transport now; the env-var trio below remains the fallback for
+sessions that clone the repo and run the scripts — both reach the
+same gates (`notes/03-agent-access.md`). The manual route:
 
 1. Generate a key: `openssl rand -hex 32`.
 2. Supabase → SQL editor:

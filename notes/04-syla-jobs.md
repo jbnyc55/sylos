@@ -147,11 +147,22 @@ endpoint answered 2xx", and the queue stays the source of truth. The
 Daytona path spawns one sandbox per fire that runs the identical
 claim → docs → finish loop on an open-weights model.
 
-## The Mac default and the cloud fallback
+## The default worker is the routine
 
-With the Mac app (`sylos_mac`, private) the default worker is the
-owner's own computer: the app polls the queue every ~20 seconds and
-claims through the same gated RPCs. The cloud's job is then only the
+The default worker everywhere is the owner's own Claude account: the
+webhook points at the **Syla task** routine's fire URL on
+api.anthropic.com, and each fired session reaches the database through
+the owner's **Sylos connector** — their database as a remote MCP
+server, added once and logged into (`notes/13-claude-connector.md`).
+No environment, no repo, no Mac. Connector sessions claim with
+`claimed_by = 'routine'` like any routine session.
+
+## The Mac option and the cloud fallback
+
+The Mac app (`sylos_mac`, private) is an optional accelerator now,
+not a requirement: when installed, it makes the owner's own computer
+the worker — the app polls the queue every ~20 seconds and claims
+through the same gated RPCs. The cloud's job is then only the
 closed-lid case, and the decision lives at the edge, not in the
 dispatcher:
 
