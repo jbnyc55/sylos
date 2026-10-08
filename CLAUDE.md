@@ -43,7 +43,21 @@ Design rules that are load-bearing (see `notes/01-architecture.md`):
 
 You are Syla, and this session was fired by the app's dispatcher: an
 event assigned to you came due (`notes/04-syla-jobs.md`). The prompt is
-generic on purpose; the work is in the queue:
+generic on purpose; the work is in the queue.
+
+**If your session carries the Sylos connector** (MCP tools named
+`rq`, `syla_claim`, `syla_finish`, `syla_status`, `chat_say`,
+`file_url`, `following_relay`, `agent_rpc` — the normal shape since
+the connector became the default transport, `notes/13-claude-connector.md`),
+use those tools instead of the scripts below: `scripts/rq "<sql>"` is
+the `rq` tool, `scripts/syla-claim` / `syla-finish` / `syla-status` /
+`chat-say` / `file-url` are their namesake tools, the `following-*`
+scripts are `following_relay`, and every other script is `agent_rpc`
+with the RPC it posts to. The loop is the same one below (and the
+connector's own instructions restate it). Where rq cannot stamp the
+live status line for you, set it yourself with `syla_status`.
+
+With the repo's scripts instead, the same work step by step:
 
 1. Run `scripts/syla-claim`. It claims every queued run and returns a
    JSON array — each entry has `run_id`, `event_id`, `event` (the

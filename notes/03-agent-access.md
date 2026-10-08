@@ -22,7 +22,23 @@ any change one write to revert.
 produce nicer error messages; bypassing them gets exactly the same
 refusals.
 
-## The transport: `rq` over HTTPS
+## The transports: the Claude connector, and `rq` over HTTPS
+
+The role has two doors, same gates behind both:
+
+- **The Claude connector** — the database itself is a remote MCP
+  server (`supabase/functions/syla-mcp`), added to Claude once and
+  logged into with the owner's Sylos credentials. Its tools (`rq`,
+  `syla_claim`, `chat_say`, `agent_rpc`, …) execute through exactly
+  the RPCs below, as the claude role, keyed by the same Vault secret.
+  This is how routines run now — no environment variables, no cloned
+  repo needed. Details, containment and revocation:
+  [`13-claude-connector.md`](13-claude-connector.md).
+- **`rq` over HTTPS** — the script transport, for sessions that have
+  the repo and the env-var trio. The rest of this page describes it;
+  everything it says about the gates applies to the connector too.
+
+## `rq` over HTTPS, the wire format
 
 Agent environments often cannot open port 5432, so the agent ships SQL to
 PostgREST RPCs over HTTPS. Both client scripts POST one statement to
@@ -107,7 +123,9 @@ prompt that logs history.
 
 ## Revoking access
 
-Any one of these is sufficient:
+Any one of these is sufficient (each also cuts the connector off —
+`connector_rq_key()` reads the same secret, and the OAuth grant can
+additionally be revoked in the Supabase dashboard):
 
 ```sql
 select vault.update_secret(
