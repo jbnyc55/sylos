@@ -64,8 +64,8 @@ echo "run-syla: tools ready — opencode $(opencode --version 2>/dev/null || ech
 # contract, same file.
 ln -sf CLAUDE.md AGENTS.md
 
-# Claims from this sandbox stamp claimed_by='cloud', so the apps can
-# say "in the cloud" on the receipt (the Mac app stamps 'mac').
+# Claims from this sandbox stamp claimed_by='cloud' — the recorded
+# fact of where this run executed (Claude sessions stamp 'routine').
 export SYLA_WORKER=cloud
 
 # Headless runs cannot answer permission prompts; the real boundary is

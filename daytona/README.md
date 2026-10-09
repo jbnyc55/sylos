@@ -1,17 +1,15 @@
-# Running Syla on Daytona (the cloud fallback, or instead of a Claude Cloud routine)
+# Running Syla on Daytona (instead of a Claude routine)
 
-**With the Mac app this is the fallback, not the default.** When the
-owner runs the Mac worker (`sylos_mac`), the Mac heartbeats
-`worker_presence` every tick and `syla-fire` stands down on any fire
-that arrives while that heartbeat is fresh (90 s by default;
-`WORKER_FRESH_SECONDS` overrides). Only a closed or absent Mac lets a
-fire reach Daytona — so the setup below arms "cloud when my computer
-is closed", and the Mac app's Settings → Cloud fallback does these
-same steps for you. Every claim records where it ran
-(`syla_job_runs.claimed_by`), so the apps can say "on your Mac" vs
-"in the cloud". Turning the fallback off is `clear_syla_webhook()`
-(runs then simply wait for the Mac); the rest of this page is
-unchanged either way.
+**The normal worker is the connector routine on the owner's own
+Claude** (`notes/13-claude-connector.md`); this directory is the
+alternative for owners who want Syla on an open-weights model
+instead. Point the webhook at `syla-fire` and every accepted fire
+spawns one sandbox — no heartbeats, no stand-down logic (the Mac-app
+worker and its `worker_presence` heartbeat were retired by migration
+`20270111000000`). Every claim still records where it ran
+(`syla_job_runs.claimed_by`). Turning this off is
+`clear_syla_webhook()` (runs then simply wait until a webhook is
+armed again).
 
 The dispatcher doesn't care what answers its webhook — it POSTs a
 bearer-token fire and watches the `syla_job_runs` queue
