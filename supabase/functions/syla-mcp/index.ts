@@ -111,10 +111,12 @@ async function authenticate(req: Request): Promise<{ ok: true } | { ok: false; r
     return { ok: false, res: unauthorized('the token is invalid or expired') }
   }
 
+  // profiles.id is the app-level identifier (a random UUID); the auth
+  // user is matched on profiles.user_id, per the schema (20260816).
   const { data: profile } = await admin
     .from('profiles')
     .select('is_owner')
-    .eq('id', data.user.id)
+    .eq('user_id', data.user.id)
     .maybeSingle()
   if (!profile?.is_owner) {
     return {
