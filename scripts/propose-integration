@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+#
+# propose-integration — file one connect-this-integration card, over
+# HTTPS.
+#
+# Calls the propose_approval RPC with kind 'integration_connect', which
+# switches to the `claude` role and inserts one pending syla_approvals
+# card. In the app the card opens the integration's connect flow right
+# where it renders (the Syla conversation when --chat names it, the
+# Inbox always) — connecting is the OWNER'S own act on their device;
+# this call turns nothing on.
+#
+# Usage:
+#   scripts/propose-integration --slug <integration> \
+#       --title "<what to connect, short>" [--detail "<why, one line>"] \
+#       [--chat <chat-uuid>]
+#
+# Flags: --slug and --title required. --slug is the integration's slug —
+# a native one (health, location, contacts, apple_calendar,
+# notifications) or a registry row's slug. --chat links the card to a
+# conversation so it renders inline there (the Syla conversation's id:
+# select id from chats where kind = 'syla').
+#
+# Environment (all required; see notes/03-agent-access.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+slug='' title='' detail='' chat=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --slug)   slug="${2:?}"; shift 2 ;;
+        --title)  title="${2:?}"; shift 2 ;;
+        --detail) detail="${2:?}"; shift 2 ;;
+        --chat)   chat="${2:?}"; shift 2 ;;
+        -h|--help) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+[ -n "$slug" ] && [ -n "$title" ] || die "--slug and --title are required"
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/03-agent-access.md"
+done
+
+body=$(jq -n --arg slug "$slug" --arg title "$title" \
+             --arg detail "$detail" --arg chat "$chat" '
+    {_kind: "integration_connect", _title: $title,
+     _payload: {integration: $slug}}
+    + (if $detail != "" then {_detail: $detail} else {} end)
+    + (if $chat != "" then {_chat_id: $chat} else {} end)')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/propose_approval" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$body"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi
