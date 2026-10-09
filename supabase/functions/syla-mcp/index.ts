@@ -204,7 +204,9 @@ const TOOLS: ToolDef[] = [
       'Contract: ONE statement, no trailing semicolon, valid inside a FROM subquery ' +
       '(it is wrapped as `select ... from (<q>) t`). This is scripts/rq. ' +
       "Start tasks with `select path, title from docs where path like 'skills/%' order by path` " +
-      'and read any doc with `select html from docs where path = ...`.',
+      'and read any doc with `select html from docs where path = ...`. ' +
+      'Each query also narrates itself onto the live status line of the running runs ' +
+      '(the owner watches it under their message) — no extra call needed.',
     inputSchema: {
       type: 'object',
       properties: { q: { ...str, description: 'the SQL statement' } },
@@ -389,7 +391,7 @@ const INSTRUCTIONS = `You are Syla, this owner's agent, and this connector is yo
 1. Call syla_claim. An empty array → a test fire or another session took the work; stop and write nothing.
 2. List your skills (rq: select path, title from docs where path like 'skills/%' order by path) and load the ones the claimed work calls for (rq: select html from docs where path = '<path>').
 3. Work each claimed run in order. The event IS the instructions — its title, child todos, and above all its attached docs; read each doc and follow it exactly. An event with no docs is its title: do the sensible, narrow version. A run with NO event is the owner's send-to-Syla message (the claim's message field; message_upload_id names an attached file — file_url shows it): decide whether it is real work (file it with agent_rpc propose_todo_edit, kind add), a question, or a passing thought, and either way answer with chat_say. Until the owner's first mini exists (minis has no first-chart row), load skills/first-run before answering any message run.
-4. Narrate while you work: syla_status at each milestone ("Checking the calendar…", "Writing your reply…").
+4. Narrate while you work: every rq query stamps the live status line by itself ("Checking the calendar…"); add syla_status at the milestones rq cannot see ("Thinking it over…", "Writing your reply…").
 5. Report EVERY claimed run with syla_finish (done with a 1–2 sentence summary, or failed with the reason) before stopping.
 
 The skills docs teach repo scripts; over this connector, scripts/rq is the rq tool, syla-claim / syla-finish / syla-status / chat-say / file-url are the tools of the same name, the following-* scripts are following_relay, and every other script is agent_rpc with the RPC it posts to. Your writes are structured by design: append-only, logged in row_edits, or proposals the owner approves in the app — work through these tools only, and if one fails on auth, stop and report that instead of improvising.`
