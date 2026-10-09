@@ -21,11 +21,21 @@ log in with:     the owner's Sylos email + password (the project's own GoTrue)
    server. It is a platform feature of the owner's own project —
    enabled by the provisioners over the Management API
    (`oauth_server_enabled`, `oauth_server_allow_dynamic_registration`,
-   `oauth_server_authorization_path = '/oauth/consent'`, and
-   `site_url = 'https://getsylos.com'`) and in `supabase/config.toml`
-   for local stacks. Claude registers itself dynamically (RFC 7591),
-   runs authorization-code + PKCE, and GoTrue mints and refreshes the
+   `oauth_server_authorization_path = '/oauth/consent'`,
+   `site_url = 'https://getsylos.com'`, and `uri_allow_list` carrying
+   the getsylos.com origins) and in `supabase/config.toml` for local
+   stacks. Claude registers itself dynamically (RFC 7591), runs
+   authorization-code + PKCE, and GoTrue mints and refreshes the
    tokens. Nothing of ours stores a credential.
+
+   The `uri_allow_list` matters and is easy to miss: GoTrue validates
+   the `Origin` header on the consent page's own calls
+   (`/oauth/authorizations/{id}`) and answers **"unauthorized request
+   origin"** unless the origin matches `site_url` or a glob in the
+   list. `site_url` redirects consent to getsylos.com, but the origin
+   check is separate, so the bare `https://getsylos.com` (and the www
+   form) must be listed outright — a `…/**` pattern alone does not
+   match a bare origin.
 2. **The consent page** is the web app's `getsylos.com/oauth/consent`
    (static, bring-your-own-database like the rest of `/app`): GoTrue
    redirects there with an `authorization_id`, the signed-in owner sees
