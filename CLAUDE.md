@@ -54,8 +54,10 @@ the `rq` tool, `scripts/syla-claim` / `syla-finish` / `syla-status` /
 `chat-say` / `file-url` are their namesake tools, the `following-*`
 scripts are `following_relay`, and every other script is `agent_rpc`
 with the RPC it posts to. The loop is the same one below (and the
-connector's own instructions restate it). Where rq cannot stamp the
-live status line for you, set it yourself with `syla_status`.
+connector's own instructions restate it). Every rq query stamps the
+live status line by itself, on both transports (the server derives
+the phrase from the statement); use `syla_status` for the milestones
+rq cannot see ("Thinking it over…", "Writing your reply…").
 
 With the repo's scripts instead, the same work step by step:
 
