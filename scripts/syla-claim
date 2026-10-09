@@ -28,9 +28,9 @@ for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
     [ -n "${!v:-}" ] || die "$v is not set — see notes/07-agent-rq-https.md"
 done
 
-# SYLA_WORKER (mac | cloud | routine), when the environment names it,
-# stamps claimed_by on every claimed run — the apps' "on your Mac" /
-# "in the cloud" receipt. Unset sends no stamp.
+# SYLA_WORKER (cloud | routine), when the environment names it, stamps
+# claimed_by on every claimed run — the recorded fact of where the run
+# executed. Unset sends no stamp.
 body='{}'
 if [ -n "${SYLA_WORKER:-}" ]; then
     body=$(jq -n --arg w "$SYLA_WORKER" '{_worker: $w}')
