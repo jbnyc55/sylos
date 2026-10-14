@@ -9,12 +9,12 @@
 -- migrations set, so a row the owner renamed themselves stays
 -- theirs, per the stock_app_rows rule.
 
-update public.vibe_code_apps
+update public.minis
 set name = 'My Calendar'
 where slug = 'calendar'
   and name = 'Calendar';
 
-update public.vibe_code_apps
+update public.minis
 set name = 'Syla''s Calendar'
 where slug = 'syla-jobs'
   and name = 'Syla Task Cal';
