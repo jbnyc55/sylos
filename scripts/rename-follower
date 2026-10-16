@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#
+# rename-follower — change what every surface calls a connection, over HTTPS.
+#
+# Calls the rename_follower RPC, which switches to the `claude` role and
+# updates followers.name — the owner's label for the person, shown on the
+# chat list, thread headers and rosters. Direct write, trigger-logged in
+# row_edits (one write to revert). Only on the owner's explicit ask in the
+# Syla conversation; names are unique case-insensitively, so a collision
+# errors instead of merging two people.
+#
+# Usage:
+#   scripts/rename-follower --follower <follower-uuid> --name "<new name>"
+#
+# Flags: both required. Find the id with
+#   scripts/rq "select id, name from followers order by name"
+#
+# Environment (all required; see notes/03-agent-access.md):
+#   SUPABASE_URL, SUPABASE_ANON_KEY, CLAUDE_RQ_KEY
+
+set -euo pipefail
+
+die() { printf 'error: %s\n' "$*" >&2; exit 1; }
+
+follower='' name=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --follower) follower="${2:?}"; shift 2 ;;
+        --name)     name="${2:?}"; shift 2 ;;
+        -h|--help) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+        *) die "unknown flag: $1" ;;
+    esac
+done
+
+[ -n "$follower" ] && [ -n "$name" ] || die "--follower and --name are required"
+
+for v in SUPABASE_URL SUPABASE_ANON_KEY CLAUDE_RQ_KEY; do
+    [ -n "${!v:-}" ] || die "$v is not set — see notes/03-agent-access.md"
+done
+
+payload=$(jq -n --arg follower "$follower" --arg name "$name" \
+    '{_follower_id: $follower, _new_name: $name}')
+
+if resp=$(curl -sS --fail-with-body \
+    -X POST "${SUPABASE_URL%/}/rest/v1/rpc/rename_follower" \
+    -H "apikey: ${SUPABASE_ANON_KEY}" \
+    -H "x-claude-rq-key: ${CLAUDE_RQ_KEY}" \
+    -H "content-type: application/json" \
+    --data "$payload"); then
+    printf '%s\n' "$resp" | jq .
+else
+    status=$?
+    printf '%s\n' "$resp" | jq . 2>/dev/null || printf '%s\n' "$resp" >&2
+    exit "$status"
+fi

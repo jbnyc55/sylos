@@ -93,6 +93,7 @@ arguments, never SQL, and is idempotent where re-running matters:
 | `scripts/syla-claim`, `syla-finish`, `syla-set-webhook` | The job queue — see [`04-syla-jobs.md`](04-syla-jobs.md) |
 | `scripts/syla-status` | The live status line on a running run (`syla_job_runs.status_note`) — the Syla thread's "what she's doing right now"; `scripts/rq` stamps it automatically per query when `SYLA_RUN_ID` is exported |
 | `scripts/chat-say`, `chat-propose`, `chat-auto-reply`, `chat-waiting`, `suggest-reply-rule` | The chat surface: the receipt into the Syla conversation, reply drafts, rule-covered auto-replies, the blue dot, and reply-rule suggestions — the `skills/chat-replies` doc is the semantic preflight |
+| `scripts/rename-follower` | Change `followers.name` — the owner's label for a connection, what every chat shows — on the owner's explicit ask in the Syla conversation. A direct write, trigger-logged in `row_edits` (one write to revert); the `skills/followers` doc carries the rules |
 | `scripts/file-url` | A read, not a write: a short-lived signed link for an `uploads` row (the claude-file edge function; rq is SQL and cannot carry bytes), so Syla can look at a dropped photo or document before filing it |
 | `scripts/following-file` | Also a read: a shared chat attachment fetched from a friend's database — the following-relay's `file` kind asks their `follower-file` for the signed URL and relays the bytes home (`notes/10-minis-and-chat.md`) |
 
