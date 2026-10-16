@@ -178,7 +178,7 @@ const AGENT_RPCS = [
   'propose_user_table', 'revise_user_table',
   'propose_auto_approve_rule', 'propose_approval',
   'propose_chat_reply', 'send_auto_reply', 'set_chat_waiting',
-  'suggest_reply_rule', 'following_names',
+  'suggest_reply_rule', 'following_names', 'rename_follower',
   'log_agent_edit', 'upsert_day_summary', 'log_weight_lift',
   'link_goal_cells', 'save_integration', 'run_agent_write_sql',
   'queue_push', 'save_mini', 'save_mini_files', 'set_mini_open',

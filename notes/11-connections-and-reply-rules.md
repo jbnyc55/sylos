@@ -32,6 +32,17 @@ your sharing. A follower reads their own row and your silos' grants,
 never your settings about them; their copy of the relationship lives in
 their database. Nothing here changes what crosses the boundary.
 
+**Names are the owner's label, and Syla can edit them on request.**
+`followers.name` is what the chat list, thread headers and rosters call
+the person. Asking Syla in her conversation to rename someone ("call
+John Johnny from now on") is the owner editing that setting, so she
+applies it directly through `rename_follower`
+(`20270120000000_rename_follower.sql`, `scripts/rename-follower`) — the
+one column of `followers` the agent may write, trigger-logged in
+`row_edits` so any rename is one write to revert. Names stay unique
+case-insensitively; everything else on the row remains the owner's
+hands only.
+
 ## The reply ladder
 
 `followers.syla_reply_mode`, per connection — how *your* Syla may answer
