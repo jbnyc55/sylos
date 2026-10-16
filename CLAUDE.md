@@ -104,11 +104,11 @@ With the repo's scripts instead, the same work step by step:
    (`scripts/chat-say --body <reply> --run <run_id>`), then report the
    run.
 
-   One standing exception: until the owner's first mini exists
-   (`minis` has no `first-chart` row), the first-run
-   walkthrough may be in progress — load `skills/first-run` before
-   answering any message run. The kickoff mentions setup or a first
-   mini; short replies like "done" or a chart choice are its steps.
+   One standing exception: until you have said anything in the Syla
+   conversation (no `chat_messages` row with `author = 'syla'` in the
+   `kind = 'syla'` chat), the welcome is still owed — load
+   `skills/first-run` before answering any message run; it says how
+   to introduce Sylos and invite questions.
 5. Report every claimed run before stopping:
    `scripts/syla-finish --run <run_id> --status done --summary "<1–2 sentences>"`
    (or `--status failed` with the reason, if a run cannot be completed).
