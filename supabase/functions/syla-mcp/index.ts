@@ -171,6 +171,7 @@ async function gatedRpc(fn: string, args: Record<string, unknown>): Promise<stri
  *  own RPCs. Webhook plumbing (set/clear_syla_webhook) is deliberately
  *  not here: wiring credentials is the setup page's job, not a task's. */
 const AGENT_RPCS = [
+  'save_note',
   'save_doc', 'move_doc', 'delete_doc', 'set_doc_silos',
   'set_note_silos', 'split_note', 'ask_silo_help',
   'propose_todo_edit', 'revise_todo_edit',
@@ -214,6 +215,28 @@ const TOOLS: ToolDef[] = [
     },
     readOnly: true,
     run: (a) => gatedRpc('run_readonly_sql', { q: String(a.q ?? '') }),
+  },
+  {
+    name: 'save_note',
+    title: 'Save a note (quick capture)',
+    description:
+      'The fast path when something worth keeping comes up — a decision, a fact, a ' +
+      "plan, reference info. ONE call, nothing to read first: the text lands in the " +
+      "owner's chute as a raw capture (a chute_items row, source 'syla') and the " +
+      'scheduled chute sort files it into its real home, with a receipt and undo. ' +
+      'Write the body as the note itself: short, self-contained plain text the owner ' +
+      'will recognize in their chute list. Do NOT list skills or read docs before ' +
+      'saving a note; the docs skill and save_doc are for editing an existing doc or ' +
+      'structuring the library, not for capture. This is scripts/save-note.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        body: { ...str, description: 'the note, 1–8000 characters of plain text' },
+      },
+      required: ['body'],
+    },
+    readOnly: false,
+    run: (a) => gatedRpc('save_note', { _body: String(a.body ?? '') }),
   },
   {
     name: 'syla_claim',
@@ -393,6 +416,8 @@ const INSTRUCTIONS = `You are Syla, this owner's agent, and this connector is yo
 3. Work each claimed run in order. The event IS the instructions — its title, child todos, and above all its attached docs; read each doc and follow it exactly. An event with no docs is its title: do the sensible, narrow version. A run with NO event is the owner's send-to-Syla message (the claim's message field; message_upload_id names an attached file — file_url shows it): decide whether it is real work (file it with agent_rpc propose_todo_edit, kind add), a question, or a passing thought, and either way answer with chat_say. Until you have said anything in the Syla conversation (it holds no message from you yet), load skills/first-run before answering any message run — it says how to introduce Sylos and invite questions.
 4. Narrate while you work: every rq query stamps the live status line by itself ("Checking the calendar…"); add syla_status at the milestones rq cannot see ("Thinking it over…", "Writing your reply…").
 5. Report EVERY claimed run with syla_finish (done with a 1–2 sentence summary, or failed with the reason) before stopping.
+
+Not every session is a task run. In an ordinary conversation, when something worth keeping comes up (a decision, a fact about the owner's life, a plan, reference info), save_note is the whole write path: one call, no skills to list or docs to read first — it lands in the owner's chute and the scheduled sort files it. Reach for the docs skill only to edit an existing doc or restructure the library.
 
 The skills docs teach repo scripts; over this connector, scripts/rq is the rq tool, syla-claim / syla-finish / syla-status / chat-say / file-url are the tools of the same name, the following-* scripts are following_relay, and every other script is agent_rpc with the RPC it posts to. Your writes are structured by design: append-only, logged in row_edits, or proposals the owner approves in the app — work through these tools only, and if one fails on auth, stop and report that instead of improvising.`
 

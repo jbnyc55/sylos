@@ -79,6 +79,7 @@ arguments, never SQL, and is idempotent where re-running matters:
 
 | Script | Does |
 | ------ | ---- |
+| `scripts/save-note` | The one-call quick capture: append one raw text item to the owner's chute (`chute_items`, `source 'syla'`) — durable immediately, filed by the next Chute sort ([`12-chute.md`](12-chute.md)). The fast path when something worth keeping comes up; no doc to compose, no path or silo to choose |
 | `scripts/agent-log` | Append a self-report row to `agent_edits` |
 | `scripts/day-summary` | Upsert one day's stats JSON |
 | `scripts/silo-note`, `scripts/split-note` | Place a note in silos / split one into sub-notes |

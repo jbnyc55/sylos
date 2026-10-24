@@ -81,7 +81,10 @@ never meets this flow).
 
 ## The tool surface
 
-`rq` (read-only SQL — scripts/rq), `syla_claim`, `syla_finish`,
+`rq` (read-only SQL — scripts/rq), `save_note` (the one-call quick
+capture into the chute — scripts/save-note; its tool description is
+the whole manual, so a conversation saves a note without listing
+skills or reading a single doc first), `syla_claim`, `syla_finish`,
 `syla_status`, `chat_say`, `file_url`, `following_relay` (the
 following-* scripts' kinds rq / prompt / edit / poke), and `agent_rpc`
 — the allowlisted long tail of gated RPCs (`save_doc`,

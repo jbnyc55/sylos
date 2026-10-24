@@ -20,7 +20,14 @@ schema.
    `scripts/file-url` (the claude-file edge function's short-lived
    signed link — rq is SQL and cannot carry bytes). The list shows raw
    items as "Dropped — files at the next sort" (captured and waiting;
-   nothing reads it before the sort).
+   nothing reads it before the sort). The agent captures here too:
+   `save_note(_body)` (`scripts/save-note`; a first-class connector
+   tool) appends a raw text item with `source 'syla'` — the one-call
+   way for Syla to keep something that came up in a conversation or a
+   run, with the filing deferred to the sort like any other drop. The
+   claude role's only other verbs on the chute remain the sort's
+   raw→filed/question updates; dismissing and undoing stay the
+   owner's.
 2. **Sort.** On the cadence in `chute_settings` — `hourly`, `thrice`
    (the fixed trio 09:00 / 13:00 / 18:00 local), or `daily` at
    `daily_time` (default 15:00) — the dispatcher queues a run of the
